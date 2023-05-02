@@ -1,7 +1,7 @@
 const URL_PROFILE = 'https://weibo.com/ajax/profile/info?uid={__UID__}';
 const URL_FILTERED_USERS = 'https://weibo.com/ajax/setting/getFilteredUsers?page={__PAGE__}';
 const WAIT_TIME_ERROR = 1000; // ms
-
+const WAIT_TIME_REQUEST = 200; // ms
 
 const HEADER = {
     'accept': 'application/json, text/plain, */*',
@@ -47,6 +47,7 @@ async function get_filtered_users() {
         } else {
             break;
         }
+        await wait(WAIT_TIME_REQUEST);
     }
     return users;
 }
@@ -125,9 +126,16 @@ async function get_profile(uid) {
 }
 
 // Write content to a file in Google Chrome
-async function write_file(filename, content) {
-    let handle = await window.showSaveFilePicker({
-        suggestedName: 'filtered-users.csv',
+async function write_file(handle, content) {
+    const writable = await handle.createWritable();
+    await writable.write(content);
+    await writable.close();
+}
+
+
+async function get_file_handle(filename) {
+    return await window.showSaveFilePicker({
+        suggestedName: filename,
         types: [{
             description: 'Text file',
             accept: {
@@ -135,27 +143,30 @@ async function write_file(filename, content) {
             },
         }],
     });
-    const writable = await handle.createWritable();
-    await writable.write(content);
-    await writable.close();
 }
 
 async function main() {
+    let file_handle = await get_file_handle('filtered-users.csv');
     let users = await get_filtered_users();
     if (users === undefined) {
         console.log('Error: users is undefined.')
         return;
     }
     console.log('Total users: ' + users.length);
+    let csv_content = 'UID,Screen Name,Location\n';
     for (let user of users) {
         let url_parts = parse_url(user.scheme);
         let uid = url_parts.uid;
         let screen_name = user.title_sub;
         let profile = await get_profile(uid);
-
+        csv_content += uid + ',' + screen_name + ',' + profile.location + '\n';
         console.log('UID: ' + uid + ', Name: ' + screen_name + ', Location: ' + profile.location);
+        await wait(WAIT_TIME_REQUEST);
 
     }
+
+    await write_file(file_handle, csv_content);
+
 }
 
 
