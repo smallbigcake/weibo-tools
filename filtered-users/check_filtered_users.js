@@ -153,14 +153,32 @@ async function main() {
         return;
     }
     console.log('Total users: ' + users.length);
-    let csv_content = 'UID,Screen Name,Location\n';
+    let csv_content = 'UID,Screen Name,Gender,Location,Statuses Count,Followers Count,Friends Count,User Type,Is Star,Is Mute User,Verified,Verified Type,Mbrank,Mbtype,Description,SVIP\n';
     for (let user of users) {
         let url_parts = parse_url(user.scheme);
         let uid = url_parts.uid;
         let screen_name = user.title_sub;
         let profile = await get_profile(uid);
-        csv_content += uid + ',' + screen_name + ',' + profile.location + '\n';
-        console.log('UID: ' + uid + ', Name: ' + screen_name + ', Location: ' + profile.location);
+        csv_content += [
+            uid,
+            screen_name,
+            profile.gender,
+            profile.location,
+            profile.statuses_count,
+            profile.followers_count,
+            profile.friends_count,
+            profile.user_type,
+            profile.is_star,
+            profile.is_muteuser,
+            profile.verified,
+            profile.verified_type,
+            profile.mbrank,
+            profile.mbtype,
+            profile.description,
+            profile.svip,
+            '\n'
+        ].join(',');
+        console.log('UID: ' + uid + ', Name: ' + screen_name + ', Gender' + profile.gender + ', Location: ' + profile.location + ', Statuses Count: ' + profile.statuses_count + ', Followers Count: ' + profile.followers_count + ', Friends Count: ' + profile.friends_count + ', User Type: ' + profile.user_type + ', Is Star: ' + profile.is_star + ', Is Mute User: ' + profile.is_muteuser + ', Verified: ' + profile.verified + ', Verified Type: ' + profile.verified_type + ', Mbrank: ' + profile.mbrank + ', Mbtype: ' + profile.mbtype + ', Description: ' + profile.description + ', SVIP: ' + profile.svip);
         await wait(WAIT_TIME_REQUEST);
 
     }
