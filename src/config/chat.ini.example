@@ -1,0 +1,14 @@
+; Chat module configuration (EXAMPLE, safe to commit).
+; Copy this file to chat.ini and replace the values with your own.
+
+[account]
+; Your Weibo numeric UID (example value, not real).
+uid = 1000000000
+; Target group chat GID to monitor (example value, not real).
+group_gid = 4000000000000000
+
+[proxy]
+; Leave proxy values empty to disable proxying.
+; Useful for capturing traffic with a local tool (e.g. Fiddler / mitmproxy).
+http = http://127.0.0.1:8080
+https = https://127.0.0.1:8080
