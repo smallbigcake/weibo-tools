@@ -5,8 +5,6 @@ import requests
 import time
 import qrcode
 
-from http.cookiejar import MozillaCookieJar
-
 import logging
 from logging import config
 
@@ -25,11 +23,9 @@ WEIBO_URL_QR_CODE_GEN = 'https://login.sina.com.cn/sso/qrcode/image'
 
 WEIBO_URL_QR_LOGIN = 'https://passport.weibo.cn/signin/qrcode/scan?qr={QR_ID}&sinain'
 
-WEIBO_URL_TEST_LOGIN = 'https://reward.media.weibo.com/hreward/aj/reward/check?mid=YOUR_MID&state=1&welfare=0&uid=YOUR_UID&bid=YOUR_BID&oid=YOUR_OID&seller=YOUR_UID&showmenu=0&topnavstyle=1&sign=YOUR_SIGN&uicode=20000391'
+WEIBO_URL_TEST_LOGIN = 'https://weibo.com/ajax/config/get_config'
 
 WEIBO_URL_SSO = 'https://login.sina.com.cn/sso/login.php'
-
-WEIBO_URL_TEST_VISITOR_READ = 'https://weibo.com/YOUR_UID/YOUR_BLOG_ID'
 
 RET_CODE_QR_UNUSED = 50114001
 RET_CODE_QR_SCANNED = 50114002
@@ -74,27 +70,67 @@ class Auth(object):
             'alt': alt,
             'url': 'https://weibo.com/login.php'
         }
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://weibo.com/',
+        }
 
-        response = self.session.get(WEIBO_URL_SSO, params=params)   # This will lead to 3 redirects.
-        logging.info(response.status_code)
-        logging.info(response.headers)
+        # Step 1: request the SSO endpoint without auto-following redirects.
+        # Weibo replies with a 432/302 that carries the cross-domain login
+        # Location; following it manually guarantees the .weibo.com login
+        # cookie is actually set (requests won't execute JS-based jumps).
+        response = self.session.get(
+            WEIBO_URL_SSO, params=params, headers=headers, allow_redirects=False
+        )
+        logging.info(f'SSO step1 status: {response.status_code}')
+
+        # Step 2: follow the redirect chain ourselves so every Set-Cookie is
+        # captured by the session (including the final .weibo.com SUB).
+        max_hops = 5
+        current = response
+        for _ in range(max_hops):
+            if current.status_code not in (301, 302, 303, 307, 308):
+                break
+            location = current.headers.get('Location')
+            if not location:
+                break
+            if location.startswith('/'):
+                location = 'https://login.sina.com.cn' + location
+            logging.info(f'SSO redirect -> {location}')
+            current = self.session.get(
+                location, headers=headers, allow_redirects=False
+            )
+            logging.info(f'SSO hop status: {current.status_code}')
+
+        # Step 3: hit the weibo.com login landing page to finalize the session
+        # (this upgrades the temporary SUB into a valid logged-in session).
+        self.session.get('https://weibo.com/login.php', headers=headers, allow_redirects=True)
+        logging.info('SSO login finalized.')
 
 
     def save_cookies(self):
         logging.info('Saving cookies.')
-        file_cookiejar = MozillaCookieJar()
+        cookies_data = []
         for cookie in self.session.cookies:
-            logging.info(cookie)
-            file_cookiejar.set_cookie(cookie)
-        file_cookiejar.save(filename=COOKIE_PATH)
+            cookies_data.append({
+                'name': cookie.name,
+                'value': cookie.value,
+                'domain': cookie.domain,
+                'path': cookie.path,
+                'secure': cookie.secure,
+                'expires': cookie.expires,
+                'http_only': bool(getattr(cookie, 'has_nonstandard_attr', lambda x: False)('HttpOnly') or
+                                 getattr(cookie, '_rest', {}).get('HttpOnly') is not None),
+            })
+        with open(COOKIE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cookies_data, f, ensure_ascii=False, indent=2)
+        logging.info(f'Saved {len(cookies_data)} cookies.')
 
     def login(self):
 
         logging.info('Start logging in...')
         self.visitor_session_gen()
         self.crossdomain_visitor_gen()
-
-        self.test_vistor_read()
 
         qr_id = self.qr_code_gen()
 
@@ -167,28 +203,59 @@ class Auth(object):
         return qr_id
 
 
-    def test_vistor_read(self):
-        logging.info('Testing vistor read count.')
-        response = self.session.get(WEIBO_URL_TEST_VISITOR_READ)
-
     def test_login(self):
-        logging.info('Checking login status.')
-        response = self.session.get(WEIBO_URL_TEST_LOGIN)
-        ret_dict = json.loads(response.text)
-        if ret_dict['code'] == 100000:
-            logging.info(ret_dict['msg'])
-            return True
-        else:
-            logging.info(ret_dict['msg'])
+        logging.info('Checking login status via API.')
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': 'https://weibo.com/',
+            'x-requested-with': 'XMLHttpRequest',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-dest': 'empty',
+        }
+        # GET request with no side effects. A logged-in session returns
+        # {"ok":1, "data":{...}}; an unauthenticated one returns
+        # {"ok":-100, "url":".../login.php?..."}.
+        try:
+            response = self.session.get(
+                WEIBO_URL_TEST_LOGIN, headers=headers, timeout=15
+            )
+        except Exception as e:
+            logging.warning(f'Login check request failed: {e}')
             return False
+        try:
+            ret = response.json()
+        except Exception:
+            logging.info('Login status: non-JSON response, not logged in.')
+            return False
+        if ret.get('ok') == 1:
+            logging.info('Login status: logged in.')
+            return True
+        logging.info(f"Login status: API returned ok={ret.get('ok')} (not logged in).")
+        return False
 
     def load(self):
         logging.info('Loading cookies from disk.')
-        file_cookiejar = MozillaCookieJar()
-        file_cookiejar.load(filename=COOKIE_PATH)
-        for cookie in file_cookiejar:
-            logging.debug(cookie)
-            self.session.cookies.set_cookie(cookie)
+        try:
+            with open(COOKIE_PATH, 'r', encoding='utf-8') as f:
+                cookies_data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            logging.info('No valid cookie file found.')
+            return
+        from requests.cookies import RequestsCookieJar
+        jar = RequestsCookieJar()
+        for item in cookies_data:
+            jar.set(
+                name=item['name'],
+                value=item['value'],
+                domain=item.get('domain'),
+                path=item.get('path', '/'),
+                secure=item.get('secure', False),
+                expires=item.get('expires'),
+            )
+        self.session.cookies.update(jar)
+        logging.info(f'Loaded {len(cookies_data)} cookies.')
 
 
 def response_strip(raw):
