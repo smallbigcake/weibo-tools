@@ -11,6 +11,7 @@ src/cookies.weibo
 src/cookies.weibo.bak
 *.weibo
 *.weibo.bak
+*.weibo.bak2
 
 # Local config (contains account / proxy settings, do NOT commit)
 src/config/chat.ini
@@ -24,3 +25,6 @@ run_auth.*
 .DS_Store
 Thumbs.db
 *.swp
+
+# Temporary analysis files & captured HARs (may contain sensitive cookies)
+tmp/
