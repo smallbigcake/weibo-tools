@@ -63,6 +63,9 @@ WEIBO_URL_SSO_WEB_CONFIG = 'https://passport.weibo.com/sso/v2/web/config'
 RET_CODE_QR_UNUSED = 50114001
 RET_CODE_QR_SCANNED = 50114002
 RET_CODE_QR_CONFIRMED = 20000000
+RET_CODE_QR_TIMEOUT = 50114003
+RET_CODE_QR_USED = 50114004
+RET_CODE_QR_EXCEPTION = 50114015
 
 
 class Auth(object):
@@ -126,7 +129,7 @@ class Auth(object):
             data={'entry': 'miniblog', 'source': 'miniblog'},
             headers={'User-Agent': headers['User-Agent'], 'Referer': signin_url,
                      'x-requested-with': 'XMLHttpRequest', 'Origin': 'https://passport.weibo.com',
-                     'x-csrf-token': csrf or ''},
+                     'X-Xsrf-Token': csrf or ''},
         )
         self.session.get(WEIBO_URL_VISITOR_BD, allow_redirects=False)
 
@@ -304,7 +307,10 @@ class Auth(object):
             check_result = self.check_qr_code_scan(qr_id)
             if check_result['success']:
                 break
-            time.sleep(2)
+            if check_result.get('terminated'):
+                logging.error(f'QR polling terminated early: {check_result.get("reason")}')
+                return
+            time.sleep(4)
         login_url = check_result.get('login_url')
 
         self.sso_login(login_url)
@@ -358,19 +364,25 @@ class Auth(object):
         passport.weibo.com/sso/v2/qrcode/check with disp=popup, rid, ver.
         """
         logging.info('Checking QR scanning status (v2).')
+        # The real passport popup (login-ZbqmGudM.js) calls /sso/v2/qrcode/check
+        # with these exact fields. `rid` is the device fingerprint rid from
+        # wbBotDetector; when absent the browser sends the literal "norid".
+        # `ver` is the fixed build version "20250520".
+        # NOTE: although the browser bundle uses axios POST, the live
+        # passport.weibo.com server rejects POST (retcode 50114008 "qrid format
+        # error") and only accepts these as GET query params. Verified 2026-08-07.
         params = {
             'entry': 'miniblog',
             'source': 'miniblog',
             'url': 'https://weibo.com/newlogin?tabtype=weibo&gid=102803&openLoginLayer=0&url=https://weibo.com/',
             'qrid': qr_id,
             'disp': 'popup',
-            'rid': callback_str(),
+            'rid': 'norid',
             'ver': '20250520',
         }
         headers = {
-            'Referer': 'https://weibo.com/',
+            'Referer': 'https://passport.weibo.com/sso/signin?entry=miniblog&source=miniblog&disp=popup',
             'x-requested-with': 'XMLHttpRequest',
-            'x-csrf-token': self.session.cookies.get('X-CSRF-TOKEN', domain='.passport.weibo.com') or '',
             'Origin': 'https://passport.weibo.com',
             'sec-fetch-site': 'same-origin',
             'sec-fetch-mode': 'cors',
@@ -391,9 +403,18 @@ class Auth(object):
             logging.info(ret_dict.get('msg'))
             data = ret_dict.get('data') or {}
             return {'success': True, 'login_url': data.get('url')}
+        elif ret_dict.get('retcode') == RET_CODE_QR_TIMEOUT:
+            logging.info(f'QR code expired (timeout): {ret_dict.get("msg")}')
+            return {'success': False, 'terminated': True, 'reason': 'timeout'}
+        elif ret_dict.get('retcode') == RET_CODE_QR_USED:
+            logging.info(f'QR code already used: {ret_dict.get("msg")}')
+            return {'success': False, 'terminated': True, 'reason': 'used'}
+        elif ret_dict.get('retcode') == RET_CODE_QR_EXCEPTION:
+            logging.info(f'QR code check exception: {ret_dict.get("msg")}')
+            return {'success': False, 'terminated': True, 'reason': 'exception'}
         else:
             logging.info(f'Unexpected return code: {ret_dict.get("retcode")}, msg: {ret_dict.get("msg")}')
-            return {'success': False}
+            return {'success': False, 'terminated': True, 'reason': 'unknown'}
 
     def qr_code_gen(self):
         """Default QR generator (v2)."""
@@ -426,16 +447,22 @@ class Auth(object):
         return qr_id
 
     def qr_code_gen_v2(self):
+        # The real passport popup calls /sso/v2/qrcode/image with these fields.
+        # Although the browser bundle uses axios POST, the live
+        # passport.weibo.com server rejects POST (retcode 50114017 "size error")
+        # and only accepts GET query params. Verified 2026-08-07.
+        # The response may carry data.image as a URL (v2.qr.weibo.cn/inf/gen?..)
+        # or as a base64 data string depending on deployment.
         params = {
             'entry': 'miniblog',
+            'source': 'miniblog',
             'size': 180,
         }
         logging.info(params)
 
         headers = {
-            'Referer': 'https://weibo.com/',
+            'Referer': 'https://passport.weibo.com/sso/signin?entry=miniblog&source=miniblog&disp=popup',
             'x-requested-with': 'XMLHttpRequest',
-            'x-csrf-token': self.session.cookies.get('X-CSRF-TOKEN', domain='.passport.weibo.com') or '',
             'Origin': 'https://passport.weibo.com',
             'sec-fetch-site': 'same-origin',
             'sec-fetch-mode': 'cors',
@@ -453,20 +480,31 @@ class Auth(object):
                 f'body={text[:200]!r}'
             )
         ret_dict = json.loads(response_strip(text))
+        if ret_dict.get('retcode') != 20000000 or not ret_dict.get('data'):
+            raise RuntimeError(
+                f'v2/qrcode/image unexpected response: retcode={ret_dict.get("retcode")}, '
+                f'msg={ret_dict.get("msg")!r}'
+            )
         qr_id = ret_dict['data']['qrid']
-        image_url = ret_dict['data']['image']
+        image = ret_dict['data']['image']
         logging.info(f'QR ID is: {qr_id}')
 
-        # v2 returns a fully-rendered QR image URL (v2.qr.weibo.cn/inf/gen?...);
-        # we just download it as-is and save, no re-encoding needed.
-        img_resp = self.session.get(image_url, headers={'Referer': 'https://weibo.com/'})
         import os
+        import base64
         qr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tmp', 'weibo_qr.png')
         os.makedirs(os.path.dirname(qr_path), exist_ok=True)
-        with open(qr_path, 'wb') as f:
-            f.write(img_resp.content)
+        # The popup build returns a base64 data string; some deployments return
+        # a plain URL. Handle both so we always end up with a local PNG.
+        if image.startswith('data:') or (len(image) > 200 and not image.startswith('http')):
+            b64 = image.split(',', 1)[1] if image.startswith('data:') else image
+            with open(qr_path, 'wb') as f:
+                f.write(base64.b64decode(b64))
+        else:
+            img_resp = self.session.get(image, headers={'Referer': 'https://weibo.com/'})
+            with open(qr_path, 'wb') as f:
+                f.write(img_resp.content)
         logging.info(f'QR image saved to: {qr_path}')
-        logging.info(f'Display QR Image for login: {image_url}')
+        logging.info(f'Display QR Image for login: {image}')
         os.startfile(qr_path)
         return qr_id
 
