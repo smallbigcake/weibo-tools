@@ -1,6 +1,7 @@
 import json
 import random
 import uuid
+from urllib.parse import parse_qs, urlparse, urlencode
 
 import time
 import qrcode
@@ -40,6 +41,12 @@ WEIBO_URL_QR_CODE_GEN_V2 = 'https://passport.weibo.com/sso/v2/qrcode/image'
 WEIBO_URL_QR_LOGIN = 'https://passport.weibo.cn/signin/qrcode/scan?qr={QR_ID}&sinain'
 
 WEIBO_URL_TEST_LOGIN = 'https://weibo.com/ajax/config/get_config'
+
+# SSO renewal (silent, no QR scan). Replays the crossdomain chain with the
+# long-lived SCF cookie (encrypted TGT) as the credential: useticket=1 tells
+# the gateway to mint a fresh ST- ticket and re-issue short-term cookies
+# (ALF/SUB/SUBP). Observed in sina-sso-login.har.
+WEIBO_URL_SSO_LOGIN_PHP = 'https://login.sina.com.cn/sso/login.php'
 
 # SSO exchange (v2 scan-confirm chain, observed in the popup HAR):
 #   1. passport.weibo.com/sso/v2/login?...&alt=ALT-...   -> 302 to v2/crossdomain
@@ -138,8 +145,13 @@ class Auth(object):
         response = self.session.get(WEIBO_URL_VISITOR_CROSSDOMAIN, params=params, allow_redirects=False)
 
 
-    def sso_login(self, alt):
-        """Redeem the scan `alt` through the v2 SSO chain (popup HAR):
+    def sso_login(self, login_url):
+        """Redeem a confirmed scan through the v2 SSO chain.
+
+        `login_url` is the full URL returned in qrcode/check's
+        data.url (e.g. .../sso/v2/login?entry=miniblog&...&alt=ALT-...&...).
+        Using it directly mirrors the browser's post-confirm navigation, so we
+        don't have to re-assemble query params by hand.
 
           1. passport.weibo.com/sso/v2/login?...&alt=ALT-...
              -> 302 Location: login.sina.com.cn/sso/v2/crossdomain?...&ticket=ST-...
@@ -151,31 +163,40 @@ class Auth(object):
         """
         headers = {
             'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,'
+                      'image/avif,image/webp,image/apng,*/*;q=0.8,'
+                      'application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
             'Referer': 'https://passport.weibo.com/sso/signin?entry=miniblog&source=miniblog&disp=popup&url='
                        'https%3A%2F%2Fweibo.com%2Fnewlogin%3Ftabtype%3Dweibo%26gid%3D102803%26openLoginLayer%3D0%26url%3Dhttps%3A%2F%2Fweibo.com%2F&from=weibopro',
-        }
-        params = {
-            'entry': 'miniblog',
-            'source': 'miniblog',
-            'type': '3',
-            'alt': alt,
-            'url': 'https://weibo.com/newlogin?tabtype=weibo&gid=102803&openLoginLayer=0&url=https://weibo.com/',
-            'disp': 'popup',
-            'rid': callback_str(),
-            'ver': '20250520',
+            'sec-ch-ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'upgrade-insecure-requests': '1',
         }
 
         # Step 1: v2/login — captures the final .weibo.com login cookies via
         # Set-Cookie and yields the crossdomain redirect Location.
-        response = self.session.get(
-            WEIBO_URL_SSO_LOGIN_V2, params=params, headers=headers, allow_redirects=False
-        )
+        response = self.session.get(login_url, headers=headers, allow_redirects=False)
         logging.info(f'SSO v2/login status: {response.status_code}')
+        _dump_exchange(response, None)
 
         # Step 2-4: follow the crossdomain/pmproxy chain manually so every
         # Set-Cookie is captured by the session.
+        self._follow_sso_chain(response, headers)
+
+        # Finalize: load the weibo.com landing page to fully establish session.
+        self.session.get(WEIBO_HOME_URL + '/', headers=headers, allow_redirects=True)
+        logging.info('SSO login finalized.')
+
+    def _follow_sso_chain(self, first_response, headers):
+        """Follow a 30x SSO redirect chain manually so every Set-Cookie is
+        captured by the session. Returns the final response."""
         max_hops = 6
-        current = response
+        current = first_response
         for _ in range(max_hops):
             if current.status_code not in (301, 302, 303, 307, 308):
                 break
@@ -187,10 +208,70 @@ class Auth(object):
                 location, headers=headers, allow_redirects=False
             )
             logging.info(f'SSO hop status: {current.status_code}')
+        return current
 
+    def renew(self):
+        """Silently refresh short-term cookies (and re-mint the long-term SCF)
+        without a QR scan.
+
+        login.php with useticket=1 replays the crossdomain chain: with an
+        existing session cookie (SUB) or the long-term SCF/TGT, the gateway
+        issues a fresh ST- ticket and re-issues ALF/SUB/SUBP/SCF/ALC. Returns
+        True if the renewal produced a logged-in session.
+        """
+        has_sub = bool(self.session.cookies.get('SUB', domain='.weibo.com') or
+                       self.session.cookies.get('SUB', domain='.sina.com.cn'))
+        has_scf = bool(self.session.cookies.get('SCF', domain='.sina.com.cn') or
+                       self.session.cookies.get('SCF', domain='.weibo.com'))
+        if not (has_sub or has_scf):
+            logging.warning('renew(): no SUB/SCF credential present; cannot renew silently.')
+            return False
+
+        headers = {
+            'User-Agent': USER_AGENT,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,'
+                      'image/avif,image/webp,image/apng,*/*;q=0.8,'
+                      'application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+            'Referer': WEIBO_HOME_URL + '/',
+            'sec-ch-ua': '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'upgrade-insecure-requests': '1',
+        }
+        params = {
+            'url': WEIBO_HOME_URL + '/',
+            '_rand': random.random(),
+            'gateway': '1',
+            'service': 'miniblog',
+            'entry': 'miniblog',
+            'useticket': '1',
+            'returntype': 'META',
+            'sudaref': '',
+            '_client_version': '0.6.33',
+        }
+        logging.info('Renewing session via SSO login.php (useticket=1).')
+        resp = self.session.get(
+            WEIBO_URL_SSO_LOGIN_PHP, params=params, headers=headers, allow_redirects=False
+        )
+        logging.info(f'login.php status: {resp.status_code}')
+        if resp.status_code not in (301, 302):
+            logging.warning(f'renew(): login.php returned unexpected status {resp.status_code}.')
+            return False
+
+        self._follow_sso_chain(resp, headers)
         # Finalize: load the weibo.com landing page to fully establish session.
         self.session.get(WEIBO_HOME_URL + '/', headers=headers, allow_redirects=True)
-        logging.info('SSO login finalized.')
+
+        if self.test_login():
+            logging.info('renew(): session renewed successfully.')
+            self.save_cookies()
+            return True
+        logging.warning('renew(): completed but session is still not logged in.')
+        return False
 
 
     def save_cookies(self):
@@ -224,9 +305,9 @@ class Auth(object):
             if check_result['success']:
                 break
             time.sleep(2)
-        self.alt = check_result.get('alt')
+        login_url = check_result.get('login_url')
 
-        self.sso_login(check_result['alt'])
+        self.sso_login(login_url)
 
         self.save_cookies()
 
@@ -257,9 +338,14 @@ class Auth(object):
             }
         elif ret_dict['retcode'] == RET_CODE_QR_CONFIRMED:
             logging.info(ret_dict['msg'])
+            data = ret_dict.get('data') or {}
+            login_url = data.get('url') or (
+                WEIBO_URL_SSO_LOGIN_V2 + '?' + urlencode({'alt': alt_from_data(data)})
+                if alt_from_data(data) else None
+            )
             return {
                 'success': True,
-                'alt': ret_dict['data']['alt']
+                'login_url': login_url
             }
         else:
             logging.info(f'Unexpected return code: {ret_dict["retcode"]}, msg: {ret_dict["msg"]}')
@@ -303,7 +389,8 @@ class Auth(object):
             return {'success': False}
         elif ret_dict.get('retcode') == RET_CODE_QR_CONFIRMED:
             logging.info(ret_dict.get('msg'))
-            return {'success': True, 'alt': ret_dict.get('data', {}).get('alt')}
+            data = ret_dict.get('data') or {}
+            return {'success': True, 'login_url': data.get('url')}
         else:
             logging.info(f'Unexpected return code: {ret_dict.get("retcode")}, msg: {ret_dict.get("msg")}')
             return {'success': False}
@@ -444,6 +531,24 @@ def response_strip(raw):
     return raw[raw.find('{'): raw.rfind('}') + 1]
 
 
+def alt_from_data(data):
+    """Extract the scan `alt` token from a qrcode/check confirm response.
+
+    The confirmed response does NOT expose `alt` as a top-level key; instead it
+    lives as the `alt` query parameter inside `data.url`, e.g.
+    data.url = '.../sso/v2/login?...&alt=ALT-...&...'. Parse it from there.
+    """
+    if not isinstance(data, dict):
+        return None
+    if data.get('alt'):
+        return data['alt']
+    url = data.get('url')
+    if not url:
+        return None
+    vals = parse_qs(urlparse(url).query).get('alt')
+    return vals[0] if vals else None
+
+
 def callback_str():
     """return callback param in API request"""
     return f'STK_{str(time.time_ns())[:16]}'
@@ -473,8 +578,13 @@ def _dump_exchange(resp, params):
 def main():
     auth = Auth()
     auth.load()
-    if not auth.test_login():
-        auth.login()
+    if auth.test_login():
+        logging.info('Already logged in.')
+        return
+    # Try a silent renewal (uses long-term SCF cookie) before a full QR login.
+    if auth.renew():
+        return
+    auth.login()
 
 
 
