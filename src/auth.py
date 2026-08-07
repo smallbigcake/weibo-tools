@@ -217,19 +217,27 @@ class Auth(object):
         """Silently refresh short-term cookies (and re-mint the long-term SCF)
         without a QR scan.
 
-        login.php with useticket=1 replays the crossdomain chain: with an
-        existing session cookie (SUB) or the long-term SCF/TGT, the gateway
-        issues a fresh ST- ticket and re-issues ALF/SUB/SUBP/SCF/ALC. Returns
-        True if the renewal produced a logged-in session.
-        """
-        has_sub = bool(self.session.cookies.get('SUB', domain='.weibo.com') or
-                       self.session.cookies.get('SUB', domain='.sina.com.cn'))
-        has_scf = bool(self.session.cookies.get('SCF', domain='.sina.com.cn') or
-                       self.session.cookies.get('SCF', domain='.weibo.com'))
-        if not (has_sub or has_scf):
-            logging.warning('renew(): no SUB/SCF credential present; cannot renew silently.')
-            return False
+        Mirrors exactly what a browser does when it hits weibo.com/ with a
+        missing `.weibo.com` SUB (proven 2026-08-07):
+          1. GET weibo.com/  -> 302 with `x-login-autologin: true` and a
+             `Location: https://login.sina.com.cn/sso/login.php?...&useticket=1`
+             URL that the *server* itself generates.
+          2. Follow that exact Location (the server-issued URL, not one we
+             build) to login.php, which replays the crossdomain chain and
+             re-issues SUB/ALF/SCF/ALC.
+        Returns True if the renewal produced a logged-in session.
 
+        This is the silent-recovery path: when only the `.weibo.com` SUB is
+        missing but the long-lived SSO TGT is still valid, the chain restores
+        the SUB without any QR re-scan. It only fails (returns False, 6102) when
+        the SSO TGT itself is spent, in which case the caller should fall back
+        to a full `login()`.
+
+        NOTE: do NOT set a manual `Cookie` request header here. `requests` sends
+        the `.sina.com.cn` SSO cookies (SCF/SUB/SUBP/ALF) and the
+        `.login.sina.com.cn` cookies (SVB/ALC) natively; overriding the `Cookie`
+        header drops the latter and causes `retcode=6102`.
+        """
         headers = {
             'User-Agent': USER_AGENT,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,'
@@ -242,24 +250,32 @@ class Auth(object):
             'sec-ch-ua-platform': '"Windows"',
             'sec-fetch-dest': 'document',
             'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'same-origin',
+            'sec-fetch-site': 'none',
             'upgrade-insecure-requests': '1',
         }
-        params = {
-            'url': WEIBO_HOME_URL + '/',
-            '_rand': random.random(),
-            'gateway': '1',
-            'service': 'miniblog',
-            'entry': 'miniblog',
-            'useticket': '1',
-            'returntype': 'META',
-            'sudaref': '',
-            '_client_version': '0.6.33',
-        }
-        logging.info('Renewing session via SSO login.php (useticket=1).')
-        resp = self.session.get(
-            WEIBO_URL_SSO_LOGIN_PHP, params=params, headers=headers, allow_redirects=False
-        )
+
+        # Step 1: hit weibo.com/ exactly as the browser does, to obtain the
+        # server-issued autologin redirect (x-login-autologin: true).
+        r1 = self.session.get(WEIBO_HOME_URL + '/', headers=headers,
+                              allow_redirects=False, timeout=15)
+        logging.info(f'weibo.com/ status: {r1.status_code} '
+                     f'x-login-autologin={r1.headers.get("x-login-autologin")}')
+        if r1.status_code == 200:
+            # Already fully logged in (no autologin needed) — nothing to renew.
+            if self.test_login():
+                return True
+        if r1.status_code not in (301, 302):
+            logging.warning(f'renew(): weibo.com/ returned unexpected status {r1.status_code}.')
+            return False
+        login_url = r1.headers.get('Location')
+        if not login_url or 'login.php' not in login_url:
+            logging.warning(f'renew(): unexpected autologin Location: {login_url}')
+            return False
+
+        # Step 2: follow the EXACT server-issued login.php URL. Let requests send
+        # the SSO cookies from the jar natively (do NOT override Cookie header).
+        logging.info('Renewing session via SSO login.php (server-issued URL).')
+        resp = self.session.get(login_url, headers=headers, allow_redirects=False, timeout=15)
         logging.info(f'login.php status: {resp.status_code}')
         if resp.status_code not in (301, 302):
             logging.warning(f'renew(): login.php returned unexpected status {resp.status_code}.')
