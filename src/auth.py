@@ -74,6 +74,73 @@ class Auth(object):
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': USER_AGENT})
 
+    def _request(self, method, url, **kwargs):
+        """Centralized HTTP wrapper: performs the request via the shared session
+        and emits structured logs.
+
+        INFO (one consolidated line per phase):
+          - request:  METHOD url  cookies=<sent cookie names>
+          - response: METHOD url -> STATUS  set-cookie=<name@domain,...>
+                      (3xx also prints the Location)
+        DEBUG (one log entry per request, newline-separated):
+          - full request headers
+          - response headers
+          - JSON body (pretty) or non-JSON byte note
+          - every cookie touched: name=value@domain
+        """
+        resp = self.session.request(method, url, **kwargs)
+        req = resp.request
+        sent_cookies = _cookie_names_from_header(req.headers.get('Cookie', ''))
+        host = urlparse(req.url).netloc
+
+        # ---- INFO: request ----
+        logging.info(f'REQ  {method} {req.url}\n'
+                     f'      cookies: {sent_cookies or "(none)"}  (host={host})')
+
+        # ---- INFO: response ----
+        set_cookies = resp.raw.headers.getlist('Set-Cookie') if resp.raw else []
+        sc_summary = ', '.join(s for s in (_set_cookie_summary(h) for h in set_cookies) if s)
+        lines = [f'RESP {method} {req.url} -> {resp.status_code} {resp.reason}']
+        if sc_summary:
+            lines.append(f'      set-cookie: {sc_summary}')
+        else:
+            lines.append('      set-cookie: (none)')
+        if resp.status_code in (301, 302, 303, 307, 308):
+            loc = resp.headers.get('Location')
+            lines.append(f'      Location: {loc}')
+        logging.info('\n'.join(lines))
+
+        # ---- DEBUG: the whole request+response as ONE log entry (newline-separated) ----
+        parts = [f'HTTP {method} {req.url}']
+        parts.append('  [request headers]')
+        for k, v in req.headers.items():
+            parts.append(f'    {k}: {v}')
+        if req.body:
+            parts.append(f'  [request body] {req.body}')
+        parts.append(f'  [response] {resp.status_code} {resp.reason}')
+        parts.append('  [response headers]')
+        for k, v in resp.headers.items():
+            parts.append(f'    {k}: {v}')
+        ctype = resp.headers.get('Content-Type', '')
+        if 'json' in ctype or (resp.text or '').lstrip().startswith(('{', '[')):
+            parts.append(f'  [response body] {_fmt_json_body(resp.text)}')
+        else:
+            parts.append(f'  [response body] (non-JSON, {len(resp.content)} bytes)')
+        if set_cookies:
+            parts.append('  [cookies touched]')
+            for h in set_cookies:
+                summary = _set_cookie_summary(h)
+                name = summary.split('@')[0]
+                dom = summary.split('@', 1)[1] if '@' in summary else ''
+                val = ''
+                for c in self.session.cookies:
+                    if c.name == name:
+                        val = c.value
+                        break
+                parts.append(f'    {name}={val}@{dom}')
+        logging.debug('\n'.join(parts))
+        return resp
+
     def visitor_session_gen(self):
         logging.info('Initializing visitor session.')
         headers = {
@@ -98,8 +165,8 @@ class Auth(object):
             'rid': callback_str(),
             'return_url': WEIBO_HOME_URL + '/',
         }
-        resp = self.session.post(
-            WEIBO_URL_GENVISTOR_2, headers=headers, data=req_data
+        resp = self._request(
+            'POST', WEIBO_URL_GENVISTOR_2, headers=headers, data=req_data
         )
         body = response_strip(resp.text)
         try:
@@ -121,17 +188,17 @@ class Auth(object):
         signin_url = (WEIBO_URL_SSO_SIGNIN + '?entry=miniblog&source=miniblog&disp=popup'
                       '&url=' + 'https%3A%2F%2Fweibo.com%2Fnewlogin%3Ftabtype%3Dweibo%26gid%3D102803'
                       '%26openLoginLayer%3D0%26url%3Dhttps%3A%2F%2Fweibo.com%2F&from=weibopro')
-        self.session.get(signin_url, headers={'User-Agent': headers['User-Agent'],
+        self._request('GET', signin_url, headers={'User-Agent': headers['User-Agent'],
                                                'Referer': WEIBO_HOME_URL + '/'}, allow_redirects=True)
         csrf = self.session.cookies.get('X-CSRF-TOKEN', domain='.passport.weibo.com')
-        self.session.post(
-            WEIBO_URL_SSO_WEB_CONFIG,
+        self._request(
+            'POST', WEIBO_URL_SSO_WEB_CONFIG,
             data={'entry': 'miniblog', 'source': 'miniblog'},
             headers={'User-Agent': headers['User-Agent'], 'Referer': signin_url,
                      'x-requested-with': 'XMLHttpRequest', 'Origin': 'https://passport.weibo.com',
                      'X-Xsrf-Token': csrf or ''},
         )
-        self.session.get(WEIBO_URL_VISITOR_BD, allow_redirects=False)
+        self._request('GET', WEIBO_URL_VISITOR_BD, allow_redirects=False)
 
     def crossdomain_visitor_gen(self):
         logging.info('Initializing cross-domain visitor session')
@@ -145,7 +212,7 @@ class Auth(object):
             'entry': 'miniblog',
             'url': 'https://weibo.com/login.php',
         }
-        response = self.session.get(WEIBO_URL_VISITOR_CROSSDOMAIN, params=params, allow_redirects=False)
+        response = self._request('GET', WEIBO_URL_VISITOR_CROSSDOMAIN, params=params, allow_redirects=False)
 
 
     def sso_login(self, login_url):
@@ -183,16 +250,14 @@ class Auth(object):
 
         # Step 1: v2/login — captures the final .weibo.com login cookies via
         # Set-Cookie and yields the crossdomain redirect Location.
-        response = self.session.get(login_url, headers=headers, allow_redirects=False)
-        logging.info(f'SSO v2/login status: {response.status_code}')
-        _dump_exchange(response, None)
+        response = self._request('GET', login_url, headers=headers, allow_redirects=False)
 
         # Step 2-4: follow the crossdomain/pmproxy chain manually so every
         # Set-Cookie is captured by the session.
         self._follow_sso_chain(response, headers)
 
         # Finalize: load the weibo.com landing page to fully establish session.
-        self.session.get(WEIBO_HOME_URL + '/', headers=headers, allow_redirects=True)
+        self._request('GET', WEIBO_HOME_URL + '/', headers=headers, allow_redirects=True)
         logging.info('SSO login finalized.')
 
     def _follow_sso_chain(self, first_response, headers):
@@ -200,17 +265,23 @@ class Auth(object):
         captured by the session. Returns the final response."""
         max_hops = 6
         current = first_response
-        for _ in range(max_hops):
+        for hop in range(1, max_hops + 1):
             if current.status_code not in (301, 302, 303, 307, 308):
                 break
             location = current.headers.get('Location')
             if not location:
                 break
-            logging.info(f'SSO redirect -> {location}')
-            current = self.session.get(
-                location, headers=headers, allow_redirects=False
+            logging.info(f'SSO redirect (hop {hop}) -> {location}')
+            current = self._request(
+                'GET', location, headers=headers, allow_redirects=False
             )
-            logging.info(f'SSO hop status: {current.status_code}')
+        else:
+            logging.warning(f'_follow_sso_chain: exhausted {max_hops} hops without '
+                            f'terminating (last status {current.status_code}).')
+        if current.status_code in (301, 302, 303, 307, 308):
+            logging.warning(f'_follow_sso_chain: ended on a redirect '
+                            f'(status {current.status_code}, '
+                            f'Location {current.headers.get("Location")}).')
         return current
 
     def renew(self):
@@ -256,14 +327,20 @@ class Auth(object):
 
         # Step 1: hit weibo.com/ exactly as the browser does, to obtain the
         # server-issued autologin redirect (x-login-autologin: true).
-        r1 = self.session.get(WEIBO_HOME_URL + '/', headers=headers,
-                              allow_redirects=False, timeout=15)
-        logging.info(f'weibo.com/ status: {r1.status_code} '
-                     f'x-login-autologin={r1.headers.get("x-login-autologin")}')
+        now, state = _auth_cookie_state(self.session.cookies)
+        logging.info(f'renew(): pre-renew auth-state: {_fmt_auth_cookie_state(now, state)}')
+        r1 = self._request('GET', WEIBO_HOME_URL + '/', headers=headers,
+                           allow_redirects=False, timeout=15)
         if r1.status_code == 200:
             # Already fully logged in (no autologin needed) — nothing to renew.
             if self.test_login():
                 return True
+            # 200 but test_login() says not logged in: the page loaded but the
+            # session is invalid. Treat as a failed renewal, not a success.
+            now, state = _auth_cookie_state(self.session.cookies)
+            logging.warning('renew(): weibo.com/ returned 200 but session is NOT '
+                            f'logged in.\n  auth-state: {_fmt_auth_cookie_state(now, state)}')
+            return False
         if r1.status_code not in (301, 302):
             logging.warning(f'renew(): weibo.com/ returned unexpected status {r1.status_code}.')
             return False
@@ -275,26 +352,28 @@ class Auth(object):
         # Step 2: follow the EXACT server-issued login.php URL. Let requests send
         # the SSO cookies from the jar natively (do NOT override Cookie header).
         logging.info('Renewing session via SSO login.php (server-issued URL).')
-        resp = self.session.get(login_url, headers=headers, allow_redirects=False, timeout=15)
-        logging.info(f'login.php status: {resp.status_code}')
+        resp = self._request('GET', login_url, headers=headers, allow_redirects=False, timeout=15)
         if resp.status_code not in (301, 302):
-            logging.warning(f'renew(): login.php returned unexpected status {resp.status_code}.')
+            logging.warning(f'renew(): login.php returned unexpected status {resp.status_code} '
+                            '(SSO TGT may be spent).')
             return False
 
         self._follow_sso_chain(resp, headers)
         # Finalize: load the weibo.com landing page to fully establish session.
-        self.session.get(WEIBO_HOME_URL + '/', headers=headers, allow_redirects=True)
+        self._request('GET', WEIBO_HOME_URL + '/', headers=headers, allow_redirects=True)
 
         if self.test_login():
             logging.info('renew(): session renewed successfully.')
             self.save_cookies()
             return True
-        logging.warning('renew(): completed but session is still not logged in.')
+        now, state = _auth_cookie_state(self.session.cookies)
+        logging.warning('renew(): chain completed but session is still not logged in.\n'
+                        f'  post-renew auth-state: {_fmt_auth_cookie_state(now, state)}')
         return False
 
 
     def save_cookies(self):
-        logging.info('Saving cookies.')
+        logging.info('Saving cookies to disk.')
         cookies_data = []
         for cookie in self.session.cookies:
             cookies_data.append({
@@ -307,9 +386,25 @@ class Auth(object):
                 'http_only': bool(getattr(cookie, 'has_nonstandard_attr', lambda x: False)('HttpOnly') or
                                  getattr(cookie, '_rest', {}).get('HttpOnly') is not None),
             })
+        # Diff against what was on disk to report what changed (updated keys).
+        try:
+            with open(COOKIE_PATH, 'r', encoding='utf-8') as f:
+                prev = {c['name'] + '@' + c.get('domain', '') for c in json.load(f)}
+        except (FileNotFoundError, json.JSONDecodeError):
+            prev = set()
+        curr = {c['name'] + '@' + c.get('domain', '') for c in cookies_data}
+        updated = sorted(curr & prev)
+        added = sorted(curr - prev)
         with open(COOKIE_PATH, 'w', encoding='utf-8') as f:
             json.dump(cookies_data, f, ensure_ascii=False, indent=2)
-        logging.info(f'Saved {len(cookies_data)} cookies.')
+        logging.info(f'Saved {len(cookies_data)} cookies.\n'
+                     f'  keys: {_describe_cookies(self.session.cookies)}\n'
+                     f'  updated ({len(updated)}): {", ".join(updated) or "(none)"}\n'
+                     f'  added  ({len(added)}): {", ".join(added) or "(none)"}')
+        debug_lines = ['Saved cookie details (name=value@domain):']
+        for c in self.session.cookies:
+            debug_lines.append(f'  {c.name}={c.value}@{c.domain}')
+        logging.debug('\n'.join(debug_lines))
 
     def login(self):
 
@@ -345,7 +440,7 @@ class Auth(object):
             'qrid': qr_id,
             'callback': callback_str()
         }
-        response = self.session.get(WEIBO_URL_QR_CHECK, headers=headers, params=params, allow_redirects=False)
+        response = self._request('GET', WEIBO_URL_QR_CHECK, headers=headers, params=params, allow_redirects=False)
         json_str = response_strip(response.text)
         ret_dict = json.loads(json_str)
         if ret_dict['retcode'] == RET_CODE_QR_UNUSED:
@@ -407,7 +502,7 @@ class Auth(object):
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
         }
-        resp = self.session.get(WEIBO_URL_QR_CHECK_V2, headers=headers, params=params, timeout=15)
+        resp = self._request('GET', WEIBO_URL_QR_CHECK_V2, headers=headers, params=params, timeout=15)
         ret_dict = json.loads(response_strip(resp.text))
         if ret_dict.get('retcode') == RET_CODE_QR_UNUSED:
             logging.info(ret_dict.get('msg'))
@@ -446,10 +541,10 @@ class Auth(object):
             'size': 180,
             'callback': callback_str()
         }
-        logging.info(params)
+        logging.info(f'QR gen (v1) params: {params}')
 
         headers = {'Referer': 'https://weibo.com/'}
-        response = self.session.get(WEIBO_URL_QR_CODE_GEN, headers=headers, params=params)
+        response = self._request('GET', WEIBO_URL_QR_CODE_GEN, headers=headers, params=params)
         raw_text = response.text
         json_str = response_strip(raw_text)
         ret_dict = json.loads(json_str)
@@ -474,7 +569,7 @@ class Auth(object):
             'source': 'miniblog',
             'size': 180,
         }
-        logging.info(params)
+        logging.info(f'QR gen (v2) params: {params}')
 
         headers = {
             'Referer': 'https://passport.weibo.com/sso/signin?entry=miniblog&source=miniblog&disp=popup',
@@ -487,8 +582,7 @@ class Auth(object):
             'sec-ch-ua-mobile': '?0',
             'sec-ch-ua-platform': '"Windows"',
         }
-        resp = self.session.get(WEIBO_URL_QR_CODE_GEN_V2, headers=headers, params=params, timeout=15)
-        _dump_exchange(resp, params)
+        resp = self._request('GET', WEIBO_URL_QR_CODE_GEN_V2, headers=headers, params=params, timeout=15)
         text = resp.text or ''
         if resp.status_code != 200 or '{' not in text:
             raise RuntimeError(
@@ -516,7 +610,7 @@ class Auth(object):
             with open(qr_path, 'wb') as f:
                 f.write(base64.b64decode(b64))
         else:
-            img_resp = self.session.get(image, headers={'Referer': 'https://weibo.com/'})
+            img_resp = self._request('GET', image, headers={'Referer': 'https://weibo.com/'})
             with open(qr_path, 'wb') as f:
                 f.write(img_resp.content)
         logging.info(f'QR image saved to: {qr_path}')
@@ -540,8 +634,8 @@ class Auth(object):
         # {"ok":1, "data":{...}}; an unauthenticated one returns
         # {"ok":-100, "url":".../login.php?..."}.
         try:
-            response = self.session.get(
-                WEIBO_URL_TEST_LOGIN, headers=headers, timeout=15
+            response = self._request(
+                'GET', WEIBO_URL_TEST_LOGIN, headers=headers, timeout=15
             )
         except Exception as e:
             logging.warning(f'Login check request failed: {e}')
@@ -554,7 +648,9 @@ class Auth(object):
         if ret.get('ok') == 1:
             logging.info('Login status: logged in.')
             return True
-        logging.info(f"Login status: API returned ok={ret.get('ok')} (not logged in).")
+        now, state = _auth_cookie_state(self.session.cookies)
+        logging.info(f"Login status: API returned ok={ret.get('ok')} (not logged in).\n"
+                     f"  auth-state: {_fmt_auth_cookie_state(now, state)}")
         return False
 
     def load(self):
@@ -577,12 +673,136 @@ class Auth(object):
                 expires=item.get('expires'),
             )
         self.session.cookies.update(jar)
-        logging.info(f'Loaded {len(cookies_data)} cookies.')
+        now, state = _auth_cookie_state(self.session.cookies)
+        logging.info(f'Loaded {len(cookies_data)} cookies.\n'
+                     f'  keys: {_describe_cookies(self.session.cookies)}\n'
+                     f'  auth-state: {_fmt_auth_cookie_state(now, state)}')
+        debug_lines = ['Loaded cookie details (name=value@domain):']
+        for c in self.session.cookies:
+            debug_lines.append(f'  {c.name}={c.value}@{c.domain}')
+        logging.debug('\n'.join(debug_lines))
 
 
 def response_strip(raw):
     """return json content part of an API response"""
     return raw[raw.find('{'): raw.rfind('}') + 1]
+
+
+def _cookie_names_from_header(header):
+    """Parse a `Cookie` request header into a compact `name1,name2,...` string
+    (values are intentionally dropped). Returns '' when empty."""
+    if not header:
+        return ''
+    parts = []
+    for pair in header.split(';'):
+        pair = pair.strip()
+        if not pair:
+            continue
+        name = pair.split('=', 1)[0].strip()
+        if name:
+            parts.append(name)
+    return ','.join(parts)
+
+
+def _set_cookie_summary(header):
+    """Parse a single `Set-Cookie` header into `name@domain` (domain defaults
+    to the cookie's own host when the attribute is absent)."""
+    if not header:
+        return ''
+    name = ''
+    domain = ''
+    for attr in header.split(';'):
+        attr = attr.strip()
+        if '=' in attr:
+            k, v = attr.split('=', 1)
+            k, v = k.strip(), v.strip()
+            if k == 'domain':
+                domain = v
+            elif name == '':
+                name = k
+        elif attr == 'domain':
+            domain = ''
+    return f'{name}@{domain}' if name else ''
+
+
+def _fmt_json_body(text):
+    """Return a pretty one-line-ish JSON summary of a response body, or a byte
+    length note for non-JSON payloads. Kept short to stay readable at INFO/DEBUG."""
+    text = (text or '').strip()
+    if not text:
+        return '(empty body)'
+    try:
+        obj = json.loads(text)
+        pretty = json.dumps(obj, ensure_ascii=False, separators=(',', ':'))
+        if len(pretty) > 800:
+            pretty = pretty[:800] + f'... (+{len(pretty) - 800} chars)'
+        return pretty
+    except (json.JSONDecodeError, ValueError):
+        return f'(non-JSON body, {len(text)} bytes)'
+
+
+def _describe_cookies(cookies):
+    """Compact `name@domain` list for a cookie jar / iterable."""
+    return ', '.join(f'{c.name}@{c.domain}' for c in cookies)
+
+
+# Critical auth cookies whose presence/expiry determine whether silent renewal
+# or a logged-in session is possible. Used for diagnostics when auto-login fails.
+_CRITICAL_COOKIES = (
+    'SCF',      # encrypted TGT (long-lived) on .sina.com.cn
+    'SUB',      # session SUB on .weibo.com
+    'SUBP',     # session SUBP on .weibo.com
+    'ALF',      # absolute expiry timestamp (epoch sec) on .sina.com.cn
+    'SVB',      # SSO validation on .login.sina.com.cn
+    'ALC',      # SSO login cookie on .login.sina.com.cn
+)
+
+
+def _auth_cookie_state(cookies):
+    """Return a mapping name -> (present: bool, domain: str, expires: int|None).
+
+    `expires` is the epoch-second expiry if the cookie carries one, else None.
+    Used to diagnose which credential expired before/after a renewal attempt.
+    """
+    found = {}
+    for c in cookies:
+        if c.name in _CRITICAL_COOKIES:
+            found[c.name] = (
+                True,
+                getattr(c, 'domain', ''),
+                getattr(c, 'expires', None),
+            )
+    state = {}
+    now = int(time.time())
+    for name in _CRITICAL_COOKIES:
+        info = found.get(name)
+        if not info:
+            state[name] = (False, '', None)
+        else:
+            _, domain, expires = info
+            state[name] = (True, domain, expires)
+    return now, state
+
+
+def _fmt_auth_cookie_state(now, state):
+    """One-line summary of critical auth cookies for INFO diagnostics.
+
+    Shows present/absent and, for cookies with an expiry, whether expired and by
+    how much. Values are intentionally omitted.
+    """
+    parts = []
+    for name in _CRITICAL_COOKIES:
+        present, domain, expires = state[name]
+        if not present:
+            parts.append(f'{name}=MISSING')
+            continue
+        if expires is None:
+            parts.append(f'{name}=OK@{domain}')
+        elif expires <= now:
+            parts.append(f'{name}=EXPIRED({now - expires}s ago)@{domain}')
+        else:
+            parts.append(f'{name}=valid({expires - now}s left)@{domain}')
+    return ' '.join(parts)
 
 
 def alt_from_data(data):
@@ -606,27 +826,6 @@ def alt_from_data(data):
 def callback_str():
     """return callback param in API request"""
     return f'STK_{str(time.time_ns())[:16]}'
-
-
-def _dump_exchange(resp, params):
-    """Log the full request + response (headers + body) for diagnostics.
-
-    Only emitted at DEBUG level so normal (INFO) runs stay quiet.
-    """
-    req = resp.request
-    logging.debug('--- REQUEST ---')
-    logging.debug(f'{req.method} {req.url}')
-    if params is not None:
-        logging.debug(f'query params: {params}')
-    for k, v in req.headers.items():
-        logging.debug(f'  > {k}: {v}')
-    if req.body:
-        logging.debug(f'  body: {req.body}')
-    logging.debug('--- RESPONSE ---')
-    logging.debug(f'status: {resp.status_code} {resp.reason}')
-    for k, v in resp.headers.items():
-        logging.debug(f'  < {k}: {v}')
-    logging.debug(f'  body ({len(resp.text)} bytes): {resp.text}')
 
 
 def main():
