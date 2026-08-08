@@ -13,8 +13,8 @@ import shutil
 import sys
 from datetime import datetime
 
-# Ensure src/ is importable.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Ensure src/ (parent of this test dir) is importable.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Configure logging to also write to test/log/.
 import logging
@@ -36,15 +36,12 @@ def setup_file_log(mode: str):
 
 
 def clear_cookies():
-    # COOKIE_PATH is resolved inside auth.py relative to its own file; mirror it.
-    cookie_path = os.path.join(os.path.dirname(__file__), '..', 'src', 'cookies.weibo')
-    # Also clear a stray cookie written at the project root by earlier runs.
-    root_cookie = os.path.join(os.path.dirname(__file__), '..', 'cookies.weibo')
-    for p in (cookie_path, root_cookie):
-        if os.path.exists(p):
-            os.remove(p)
-            logging.info(f'Cleared cookies: {p}')
-    if not os.path.exists(cookie_path) and not os.path.exists(root_cookie):
+    # COOKIE_PATH is resolved inside auth.py relative to its own file (src/cookies.weibo).
+    cookie_path = os.path.join(os.path.dirname(__file__), '..', 'cookies.weibo')
+    if os.path.exists(cookie_path):
+        os.remove(cookie_path)
+        logging.info(f'Cleared cookies: {cookie_path}')
+    else:
         logging.info('No cookie file to clear.')
 
 

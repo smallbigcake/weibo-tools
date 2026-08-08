@@ -28,3 +28,6 @@ Thumbs.db
 
 # Temporary analysis files & captured HARs (may contain sensitive cookies)
 tmp/
+
+# CodeBuddy working memory (local, per-machine context)
+.codebuddy/
