@@ -1,6 +1,8 @@
 import json
+import os
 import random
 import uuid
+import io
 from urllib.parse import parse_qs, urlparse, urlencode
 
 import time
@@ -10,10 +12,17 @@ import requests
 import logging
 from logging import config
 
+# logging.ini contains relative handler paths (log/weibo.log). Resolve them
+# relative to this file's directory so auth.py works regardless of CWD.
+_logging_cfg_dir = os.path.dirname(os.path.abspath(__file__))
+_prev_cwd = os.getcwd()
+os.chdir(_logging_cfg_dir)
+try:
+    logging.config.fileConfig('config/logging.ini')
+finally:
+    os.chdir(_prev_cwd)
 
-logging.config.fileConfig('config/logging.ini')
-
-COOKIE_PATH = './cookies.weibo'
+COOKIE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.weibo')
 
 WEIBO_HOME_URL = 'https://weibo.com'
 
@@ -406,29 +415,17 @@ class Auth(object):
             debug_lines.append(f'  {c.name}={c.value}@{c.domain}')
         logging.debug('\n'.join(debug_lines))
 
-    def login(self):
-
+    def login(self, max_rounds=5):
         logging.info('Start logging in...')
         self.visitor_session_gen()
         self.crossdomain_visitor_gen()
 
-        qr_id = self.qr_code_gen()
-
-        while True:
-            check_result = self.check_qr_code_scan(qr_id)
-            if check_result['success']:
-                break
-            if check_result.get('terminated'):
-                logging.error(f'QR polling terminated early: {check_result.get("reason")}')
-                return
-            time.sleep(4)
-        login_url = check_result.get('login_url')
-
-        self.sso_login(login_url)
-
-        self.save_cookies()
-
-        self.test_login()
+        # The QR window drives the scan-poll loop on the GUI thread (tkinter
+        # must run on the main thread), auto-populating, auto-refreshing on
+        # expiry, and auto-closing on success. This blocks until login finishes
+        # or the retry cap is exceeded.
+        win = _QRWindow()
+        win.run(self, max_rounds=max_rounds)
 
     def check_qr_code_scan_v1(self, qr_id):
         """v1 poll endpoint (legacy). See check_qr_code_scan_v2 for default."""
@@ -554,8 +551,7 @@ class Auth(object):
         qr_login_url = WEIBO_URL_QR_LOGIN.format(QR_ID=qr_id)
         qr_img = qrcode.make(qr_login_url)
         logging.info(f'Display QR Image for login: {qr_login_url}')
-        qr_img.show()
-        return qr_id
+        return qr_id, qr_img
 
     def qr_code_gen_v2(self):
         # The real passport popup calls /sso/v2/qrcode/image with these fields.
@@ -599,24 +595,24 @@ class Auth(object):
         image = ret_dict['data']['image']
         logging.info(f'QR ID is: {qr_id}')
 
-        import os
         import base64
+        from PIL import Image
         qr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'tmp', 'weibo_qr.png')
         os.makedirs(os.path.dirname(qr_path), exist_ok=True)
         # The popup build returns a base64 data string; some deployments return
         # a plain URL. Handle both so we always end up with a local PNG.
         if image.startswith('data:') or (len(image) > 200 and not image.startswith('http')):
             b64 = image.split(',', 1)[1] if image.startswith('data:') else image
-            with open(qr_path, 'wb') as f:
-                f.write(base64.b64decode(b64))
+            png_bytes = base64.b64decode(b64)
         else:
             img_resp = self._request('GET', image, headers={'Referer': 'https://weibo.com/'})
-            with open(qr_path, 'wb') as f:
-                f.write(img_resp.content)
+            png_bytes = img_resp.content
+        with open(qr_path, 'wb') as f:
+            f.write(png_bytes)
         logging.info(f'QR image saved to: {qr_path}')
         logging.info(f'Display QR Image for login: {image}')
-        os.startfile(qr_path)
-        return qr_id
+        qr_img = Image.open(io.BytesIO(png_bytes)).convert('RGB')
+        return qr_id, qr_img
 
 
     def test_login(self):
@@ -826,6 +822,132 @@ def alt_from_data(data):
 def callback_str():
     """return callback param in API request"""
     return f'STK_{str(time.time_ns())[:16]}'
+
+
+class _QRWindow:
+    """A self-contained QR display window that drives the scan-poll loop.
+
+    tkinter must run on the main thread, so this window owns the poll loop via
+    `root.after` timers (no background thread -> no cross-thread Tcl tearing
+    down). `run(auth, max_rounds)` blocks (on `mainloop`) until the scan is
+    confirmed (window auto-closes) or the retry cap is hit.
+
+    Behavior:
+      - auto-popup:    a window is shown as soon as the first QR is generated.
+      - auto-close:    on successful scan the window is destroyed and login
+                       finalizes (sso_login / save_cookies / test_login).
+      - auto-refresh:  on QR expiry/used/exception a fresh QR replaces the old
+                       one in the same window (up to `max_rounds` times).
+
+    Falls back to `os.startfile` (external viewer, no auto-close) when tkinter
+    is unavailable (e.g. a headless environment).
+    """
+
+    def __init__(self, title='Weibo QR Login'):
+        try:
+            import tkinter as tk
+            from PIL import ImageTk
+        except Exception:
+            self._tk = None
+            self._root = None
+            return
+        self._tk = tk
+        self._ImageTk = ImageTk
+        self._title = title
+        self._root = tk.Tk()
+        self._root.withdraw()  # hide until the QR image is ready
+        self._root.title(title)
+        self._root.resizable(False, False)
+        self._label = tk.Label(self._root)
+        self._label.pack(padx=20, pady=20)
+        self._photo = None
+        self._auth = None
+        self._qr_id = None
+        self._round = 0
+        self._max_rounds = 5
+        self._shown = False  # tracks first deiconify
+
+    def run(self, auth, max_rounds=5):
+        """Drive the QR login loop. Blocks until finalized or abandoned."""
+        self._auth = auth
+        self._max_rounds = max_rounds
+        if self._root is None:
+            self._run_headless(auth, max_rounds)
+            return
+        self._new_round()
+        self._root.mainloop()
+
+    def _new_round(self):
+        self._round += 1
+        if self._round > self._max_rounds:
+            logging.error(f'login(): exceeded max QR refresh rounds '
+                          f'({self._max_rounds}).')
+            self._root.destroy()
+            return
+        qr_id, img = self._auth.qr_code_gen()
+        self._qr_id = qr_id
+        self.show(img)
+        logging.info(f'QR round {self._round}/{self._max_rounds}: waiting for scan...')
+        self._root.after(4000, self._poll)
+
+    def show(self, img):
+        """Display (or refresh) the QR image in the window."""
+        photo = self._ImageTk.PhotoImage(img)
+        self._photo = photo  # keep reference alive
+        self._label.configure(image=photo)
+        if not self._shown:
+            self._root.deiconify()  # first display: make visible
+            self._shown = True
+        self._root.lift()
+        self._root.update_idletasks()
+
+    def _poll(self):
+        check = self._auth.check_qr_code_scan(self._qr_id)
+        if check['success']:
+            logging.info('QR scanned & confirmed; finalizing login.')
+            login_url = check.get('login_url')
+            self._auth.sso_login(login_url)
+            self._auth.save_cookies()
+            self._auth.test_login()
+            self._root.destroy()
+            return
+        if check.get('terminated'):
+            reason = check.get('reason')
+            logging.warning(f'QR {reason}; refreshing.')
+            self._new_round()
+            return
+        self._root.after(4000, self._poll)
+
+    def _run_headless(self, auth, max_rounds):
+        """Fallback when tkinter is unavailable: poll with a blocking loop and
+        open each fresh QR in the OS default viewer (no auto-close)."""
+        for self._round in range(1, max_rounds + 1):
+            qr_id, img = auth.qr_code_gen()
+            self._qr_id = qr_id
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               '..', 'tmp', 'weibo_qr.png')
+            img.save(path)
+            logging.info(f'QR round {self._round}/{max_rounds} (headless): '
+                         f'open {path} to scan.')
+            try:
+                os.startfile(path)
+            except Exception:
+                pass
+            while True:
+                check = auth.check_qr_code_scan(qr_id)
+                if check['success']:
+                    auth.sso_login(check.get('login_url'))
+                    auth.save_cookies()
+                    auth.test_login()
+                    return
+                if check.get('terminated'):
+                    logging.warning(f'QR {check.get("reason")}; refreshing.')
+                    break
+                time.sleep(4)
+
+    def close(self):
+        if self._root is not None:
+            self._root.destroy()
 
 
 def main():
