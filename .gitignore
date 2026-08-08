@@ -7,11 +7,13 @@ venv/
 weibo-env/
 
 # Credentials & local session
-src/cookies.weibo
-src/cookies.weibo.bak
+# Catches any cookie-jar dump variant: cookies, cookies.weibo, .bak, .bak2 ...
+src/cookies*
 *.weibo
 *.weibo.bak
 *.weibo.bak2
+*.session
+session*.json
 
 # Local config (contains account / proxy settings, do NOT commit)
 src/config/chat.ini
@@ -31,3 +33,7 @@ tmp/
 
 # CodeBuddy working memory (local, per-machine context)
 .codebuddy/
+
+# Local scanner config (contains real-UID denylist / project-specific PII terms;
+# do NOT commit). Copy scripts/scan_config.example.json -> .scan_config.json locally.
+.scan_config.json
