@@ -202,14 +202,23 @@ def print_report(summary, users):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Analyze the current user\'s Weibo blacklist.')
+    ap = argparse.ArgumentParser(description='Analyze a Weibo user\'s blacklist (multi-user).')
+    ap.add_argument('--uid', default=None,
+                    help='Numeric Weibo UID whose saved session to reuse. '
+                         'Mutually exclusive in use with --user (only one needed).')
+    ap.add_argument('--user', default=None,
+                    help='Human-friendly login label; resolves to a saved UID session.')
+    ap.add_argument('--no-prompt', action='store_true',
+                    help='Do not prompt; use the only/existing identity or "default".')
     ap.add_argument('--json', default=None, help='Optional path to dump the summary + user list as JSON.')
     args = ap.parse_args()
 
     auth = Auth()
+    if not auth.resolve_uid(args.uid, args_user=args.user, prompt=not args.no_prompt):
+        return
     auth.load()
     if not auth.test_login():
-        print('Not logged in. Run src/test/run_login.py first (QR scan).')
+        print('Not logged in. Run src/test/run_login.py --user <label> first (QR scan).')
         return
 
     total, users = fetch_all(auth)
