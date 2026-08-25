@@ -32,6 +32,9 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from logutil import setup as _setup_logging
+_setup_logging()
+
 from auth import Auth, USER_AGENT
 
 ENDPOINT = 'https://weibo.com/ajax/setting/getFilteredUsers'

@@ -11,9 +11,12 @@ To add a new subcommand:
            ...
   2. Import it below so it is registered on startup.
 """
-from weibo_tool.commands import login, blacklist  # noqa: F401  (registers subcommands)
+from weibo_tool.commands import (  # noqa: F401
+    login, blacklist, blacklist_deep, blacklist_diag, top_followed, following_deep,
+)
 
-__all__ = ['login', 'blacklist']
+__all__ = ['login', 'blacklist', 'blacklist_deep', 'blacklist_diag', 'top_followed',
+           'following_deep']
 
 
 def register_subcommands(subparsers, parents=None):
@@ -23,5 +26,6 @@ def register_subcommands(subparsers, parents=None):
     flags) merged into each subparser so global options work after the
     subcommand name too.
     """
-    for mod in (login, blacklist):
+    for mod in (login, blacklist, blacklist_deep, blacklist_diag, top_followed,
+                following_deep):
         mod.register(subparsers, parents=parents)

@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Configure logging to also write to test/log/.
 import logging
+from logutil import setup as _setup_logging
+_setup_logging()
 Timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 def setup_file_log(mode: str):

@@ -14,7 +14,10 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 from auth import Auth
+from logutil import setup as _setup_logging
 from weibo_tool import commands  # noqa: F401  (import side-effect registers subcommands)
+
+_setup_logging()
 
 
 def _identity_parent():

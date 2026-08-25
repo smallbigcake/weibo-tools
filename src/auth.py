@@ -13,17 +13,10 @@ import qrcode
 import requests
 
 import logging
-from logging import config
 
-# logging.ini contains relative handler paths (log/weibo.log). Resolve them
-# relative to this file's directory so auth.py works regardless of CWD.
-_logging_cfg_dir = os.path.dirname(os.path.abspath(__file__))
-_prev_cwd = os.getcwd()
-os.chdir(_logging_cfg_dir)
-try:
-    logging.config.fileConfig('config/logging.ini')
-finally:
-    os.chdir(_prev_cwd)
+# Shared logging setup (config/logging.ini, relative to this file). Idempotent.
+from logutil import setup as _setup_logging
+_setup_logging()
 
 # Multi-user support: each identity stores its cookies in its own file
 # `cookies.<uid>.weibo` under the same directory. The UID is the numeric Weibo
@@ -264,6 +257,14 @@ class Auth(object):
             loc = resp.headers.get('Location')
             lines.append(f'      Location: {loc}')
         logging.info('\n'.join(lines))
+
+        # Anomaly: non-2xx. Surface the full response (headers + body) at WARNING
+        # regardless of the global level, so we can see what the server actually
+        # said without flipping on DEBUG everywhere.
+        if resp.status_code >= 400 or resp.status_code in (301, 302, 303, 307, 308):
+            from logutil import dump_response
+            dump_response(resp, label='request helper: unexpected status %s'
+                          % resp.status_code)
 
         # ---- DEBUG: the whole request+response as ONE log entry (newline-separated) ----
         parts = [f'HTTP {method} {req.url}']
@@ -807,6 +808,35 @@ class Auth(object):
                      f"  auth-state: {_fmt_auth_cookie_state(now, state)}")
         return False
 
+    def ensure_session(self):
+        """Auto-recover a live session. Returns True if a logged-in session is
+        now available.
+
+        Recovery order:
+          1. already logged in? (test_login) — nothing to do.
+          2. silent SSO `renew()` — replays the crossdomain chain with the
+             long-lived SCF cookie to re-mint short-term SUB/ALF without any
+             QR scan. Covers the common case where only the short-term session
+             cookie expired while the TGT is still valid.
+          3. full QR `login()` as a last resort (needs a human scan; in a
+             headless run it blocks on the QR window / os.startfile until
+             scanned, then resumes).
+
+        This is the hook the crawl layer calls whenever it detects a login
+        failure (ok:-100 / redirect to login.php), so an unattended run keeps
+        going instead of silently producing empty caches.
+        """
+        if self.test_login():
+            return True
+        logging.warning('Session not logged in; attempting silent SSO renew...')
+        if self.renew():
+            logging.info('ensure_session: silent SSO renew succeeded.')
+            return True
+        logging.warning('ensure_session: SSO renew failed (long-term credential '
+                        'likely spent); falling back to QR login (needs a scan).')
+        self.login()
+        return self.test_login()
+
     def load(self):
         logging.info('Loading cookies for "%s" from disk.' % (self.uid or self.label))
         path = self._cookie_path()
@@ -1092,6 +1122,7 @@ class _QRWindow:
             self._qr_id = qr_id
             path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                '..', 'tmp', 'weibo_qr.png')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             img.save(path)
             logging.info(f'QR round {self._round}/{max_rounds} (headless): '
                          f'open {path} to scan.')

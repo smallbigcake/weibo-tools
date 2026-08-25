@@ -1,9 +1,14 @@
 import json
 import logging
 import os
+import sys
 import time
 
 import requests
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from logutil import setup as _setup_logging
+_setup_logging()
 
 from session import Session
 
@@ -28,7 +33,18 @@ CHAT_INFO_MEDIA_TYPE_LINK = 13
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config', 'chat.ini')
+# Local config (may contain real UID / proxy -> NOT committed). It lives at the
+# project ROOT under config/ (gitignored), separate from the in-package
+# resources under src/. Fall back to the legacy src/config/ location so existing
+# setups still work.
+_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(_SRC_DIR)
+CONFIG_CANDIDATES = [
+    os.path.join(_PROJECT_ROOT, 'config', 'chat.ini'),
+    os.path.join(_SRC_DIR, 'config', 'chat.ini'),
+]
+CONFIG_PATH = next((p for p in CONFIG_CANDIDATES if os.path.exists(p)),
+                   CONFIG_CANDIDATES[0])
 
 
 def load_config(path=CONFIG_PATH):

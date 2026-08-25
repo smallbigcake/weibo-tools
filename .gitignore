@@ -15,11 +15,13 @@ src/cookies*
 *.session
 session*.json
 
-# Local config (contains account / proxy settings, do NOT commit)
-src/config/chat.ini
+# Local config (contains account / proxy settings, do NOT commit).
+# Real file lives at project root config/; the .example template is committed.
+config/chat.ini
 
 # Logs
 src/log/*.log
+src/log/weibo.log.*
 *.log
 run_auth.*
 
@@ -30,6 +32,13 @@ Thumbs.db
 
 # Temporary analysis files & captured HARs (may contain sensitive cookies)
 tmp/
+
+# Deep-crawl caches (per-user profile / follow-list JSON dumps)
+.cache/
+
+# Analysis artifacts (contain real Weibo UIDs / profile PII; generated locally,
+# do NOT commit). Re-run `blacklist-deep` to regenerate.
+data/
 
 # CodeBuddy working memory (local, per-machine context)
 .codebuddy/

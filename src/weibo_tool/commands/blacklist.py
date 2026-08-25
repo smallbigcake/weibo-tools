@@ -12,6 +12,9 @@ _SRC_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
+from logutil import setup as _setup_logging
+_setup_logging()
+
 
 def register(subparsers, parents=None):
     p = subparsers.add_parser('blacklist', parents=parents or [],
