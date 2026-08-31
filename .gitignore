@@ -18,6 +18,7 @@ session*.json
 # Local config (contains account / proxy settings, do NOT commit).
 # Real file lives at project root config/; the .example template is committed.
 config/chat.ini
+config/experiment.local.json
 
 # Logs
 src/log/*.log
