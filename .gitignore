@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+weibo-env/
+
+# Credentials & local session
+# Catches any cookie-jar dump variant: cookies, cookies.weibo, .bak, .bak2 ...
+src/cookies*
+*.weibo
+*.weibo.bak
+*.weibo.bak2
+*.session
+session*.json
+
+# Local config (contains account / proxy settings, do NOT commit)
+src/config/chat.ini
+
+# Logs
+src/log/*.log
+*.log
+run_auth.*
+
+# OS & editor
+.DS_Store
+Thumbs.db
+*.swp
+
+# Temporary analysis files & captured HARs (may contain sensitive cookies)
+tmp/
+
+# CodeBuddy working memory (local, per-machine context)
+.codebuddy/
+
+# Local scanner config (contains real-UID denylist / project-specific PII terms;
+# do NOT commit). Copy scripts/scan_config.example.json -> .scan_config.json locally.
+.scan_config.json
