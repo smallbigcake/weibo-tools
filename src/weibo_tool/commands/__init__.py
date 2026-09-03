@@ -13,10 +13,11 @@ To add a new subcommand:
 """
 from weibo_tool.commands import (  # noqa: F401
     login, blacklist, blacklist_deep, blacklist_diag, top_followed, following_deep,
+    relations_sync, profile_visit,
 )
 
 __all__ = ['login', 'blacklist', 'blacklist_deep', 'blacklist_diag', 'top_followed',
-           'following_deep']
+           'following_deep', 'relations_sync', 'profile_visit']
 
 
 def register_subcommands(subparsers, parents=None):
@@ -27,5 +28,5 @@ def register_subcommands(subparsers, parents=None):
     subcommand name too.
     """
     for mod in (login, blacklist, blacklist_deep, blacklist_diag, top_followed,
-                following_deep):
+                following_deep, relations_sync, profile_visit):
         mod.register(subparsers, parents=parents)
