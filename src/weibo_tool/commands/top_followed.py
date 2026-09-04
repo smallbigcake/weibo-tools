@@ -155,17 +155,39 @@ def _category_of(name):
     return tags
 
 
+def _follow_uids_of(d):
+    """Extract the followed-uid list from a per-user follow cache.
+
+    The list may be stored under any of the historically-used keys
+    (`uids` / `followers` / `fans`); accept whichever is present so a key-name
+    drift in the upstream cache writer cannot silently zero out the count.
+    """
+    for key in ('uids', 'followers', 'fans'):
+        v = d.get(key)
+        if isinstance(v, list):
+            return v
+    return []
+
+
 def _aggregate(follow_dir=FOLLOW_DIR):
     """Return ALL (uid, times_followed) pairs across all follow caches, ranked.
 
     Returns the full Counter.most_common() (no truncation) so callers can apply
     exclusions on a larger pool and still report a true top-N afterwards.
+
+    Only genuine per-user follow caches are counted. `fetch_follows` always
+    writes a `sample` key (possibly empty); a file without one is a subject
+    roster (an account's own following list), which is NOT one person's follow
+    list — counting it would silently hand a phantom +1 to every uid in it.
+    This filter also repairs caches written before the roster was moved out of
+    the per-user follow directory.
     """
     followed_by = Counter()
     if not os.path.isdir(follow_dir):
         print('[top-followed] no follows cache at %s — run the deep crawl with '
               '--with-follows first.' % follow_dir)
         return followed_by
+    skipped = 0
     for fn in os.listdir(follow_dir):
         if not fn.endswith('.json'):
             continue
@@ -173,8 +195,15 @@ def _aggregate(follow_dir=FOLLOW_DIR):
             d = json.load(open(os.path.join(follow_dir, fn), 'r', encoding='utf-8-sig'))
         except Exception:
             continue
-        for u in (d.get('uids') or []):
+        if not isinstance(d, dict) or 'sample' not in d:
+            skipped += 1
+            continue
+        for u in _follow_uids_of(d):
             followed_by[u] += 1
+    if skipped:
+        print('[top-followed] skipped %d non-follow-list file(s) in %s '
+              '(subject rosters are not a follow audience).'
+              % (skipped, follow_dir))
     return followed_by.most_common()
 
 
@@ -187,7 +216,8 @@ def _resolve_names(uids, enrich, viewer, profile_dir=None):
             else os.path.join(profile_dir, '%s.json' % uid)
         if os.path.exists(p):
             try:
-                pd = json.load(open(p, 'r', encoding='utf-8-sig'))
+                with open(p, 'r', encoding='utf-8-sig') as fh:
+                    pd = json.load(fh)
                 nm = pd.get('screen_name') or pd.get('name')
                 if nm:
                     uid_name[uid] = nm
@@ -314,15 +344,20 @@ def run(args, auth):
         if len(ranked) >= args.top:
             break
 
-    total_edges = sum(c for _, c in ranked)
+    # The share denominator is the WHOLE follow-edge universe (`full`), not the
+    # post-exclusion `ranked` list — otherwise excluding official/media accounts
+    # would shrink the base and inflate every remaining share.
+    total_edges = sum(c for _, c in full)
     ex_by_cat = {}
     for _, _, _, cat in excluded:
         ex_by_cat[cat] = ex_by_cat.get(cat, 0) + 1
     print('[top-followed] reporting top %d (of %d ranked). Excluded: %s'
           % (len(ranked), len(full), ex_by_cat or 'none'))
-    print('\nrank | times_followed | uid | name')
+    print('\nrank | times_followed | share% | uid | name')
     for i, (uid, cnt) in enumerate(ranked, 1):
-        print('%4d | %5d | %s | %s' % (i, cnt, uid, uid_name.get(uid, '') or '?'))
+        share = (100.0 * cnt / total_edges) if total_edges else 0.0
+        print('%4d | %5d | %6.2f | %s | %s'
+              % (i, cnt, share, uid, uid_name.get(uid, '') or '?'))
 
     json_path = args.json or os.path.join(data_dir, 'top_followed.json')
     csv_path = args.csv or os.path.join(data_dir, 'top_followed.csv')
@@ -337,6 +372,7 @@ def run(args, auth):
         'total_follow_edges': total_edges,
         'accounts': [
             {'rank': i, 'uid': uid, 'times_followed': cnt,
+             'share': round(100.0 * cnt / total_edges, 3) if total_edges else 0.0,
              'name': uid_name.get(uid, '') or None}
             for i, (uid, cnt) in enumerate(ranked, 1)
         ],

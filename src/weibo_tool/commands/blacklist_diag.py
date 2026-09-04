@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from logutil import setup as _setup_logging
 _setup_logging()
 import time
+import random
 from collections import Counter
 
 # This module lives in src/weibo_tool/commands/; resolve up to src/.
@@ -47,7 +48,8 @@ def classify_errors():
             continue
         n_total += 1
         try:
-            d = json.load(open(os.path.join(PROFILE_DIR, fn), 'r', encoding='utf-8'))
+            with open(os.path.join(PROFILE_DIR, fn), 'r', encoding='utf-8') as fh:
+                d = json.load(fh)
         except Exception:
             kinds['unreadable_cache'] += 1
             continue
@@ -89,7 +91,7 @@ def retry_uids(vauth, uids, retries=4):
                                  'headers': hdrs, 'body': body})
             except Exception as e:
                 attempts.append({'attempt': attempt, 'exception': str(e)})
-            time.sleep(2.0 + __import__('random').random() * 2.0)
+            time.sleep(2.0 + random.random() * 2.0)
         out.append({'uid': uid, 'attempts': attempts})
     return out
 

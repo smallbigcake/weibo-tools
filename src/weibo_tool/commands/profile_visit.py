@@ -57,8 +57,8 @@ if _SRC_DIR not in sys.path:
 from logutil import setup as _setup_logging
 _setup_logging()
 
-from weibo_tool.commands.blacklist_deep import (
-    _sleep, _is_ban_response, _is_account_issue)
+from weibo_tool.http_engine import (
+    _sleep, _is_ban_response, _is_account_issue, _request_json)
 from weibo_tool.commands.relations_sync import (
     _load_json, _save_json, _now_iso, run_following, run_fans)
 
@@ -71,6 +71,11 @@ TOPIC_URL = 'https://weibo.com/ajax/profile/topicContent?tabid=231093_-_recently
 # the requests as a genuine page view rather than a single API probe.
 _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
        '(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36')
+# Pinned client/server version headers captured from a real Chrome profile-page
+# load (HAR, 2026-09-04). Weibo only treats the request as a genuine page view
+# when these are present, so they are KEPT VERBATIM (not randomised or derived
+# from a live page fetch). If visit registration ever stops working, refresh both
+# here — this is the only place the two magic version strings live.
 _CLIENT_VERSION = 'v1.1.244'
 _SERVER_VERSION = 'v2026.09.02.2'
 
@@ -164,26 +169,27 @@ def _visit_url(uid):
 def visit_one(auth, uid):
     """Register one profile visit using the single required request.
 
+    The call goes through the shared `_request_json` engine (passing the
+    browser-like headers above) so this command gets the same resilience as the
+    crawlers: backoff on soft rate-limits, and AUTO-RECOVERY when the session
+    dies mid-run (silent SSO renewal, falling back to a QR prompt). Without it a
+    dead session turned every remaining uid into 'ratelimited' forever.
+
     Returns (status, user):
         status -> 'ok'          request completed; the visit is now recorded.
-                  'ratelimited' network failure / non-200 (retryable).
+                  'ratelimited' no usable response after retries (retryable).
                   'banned'      account issue / ban (permanent for this uid).
         user   -> the `data.user` dict from the response on success, else None.
                   Callers may use it to refresh the stored snapshot record at
                   no extra API cost (see --update-profile).
     """
-    headers = _visit_headers(auth, uid)
-    try:
-        r = auth.session.get(_visit_url(uid), headers=headers, timeout=20,
-                             allow_redirects=False)
-    except Exception:
+    obj = _request_json(auth, _visit_url(uid),
+                        headers=_visit_headers(auth, uid))
+    if obj is None:
+        # No usable response: network failure, a non-200 the engine could not
+        # clear, or an unexpected `ok` after all retries. Retryable, so the uid
+        # stays pending and is re-attempted on the next run.
         return 'ratelimited', None
-    if r.status_code != 200:
-        return 'ratelimited', None
-    try:
-        obj = r.json()
-    except Exception:
-        obj = {}
     if _is_ban_response(obj) is not None or _is_account_issue(obj) is not None:
         return 'banned', None
     user = (obj.get('data') or {}).get('user') or None
@@ -279,6 +285,20 @@ def _verify_registered(auth):
 # visit-record list has a limited capacity and evicts older entries.
 _VERIFY_BATCH = 10
 
+# Visit requests renew a dead session automatically, so a run of back-to-back
+# failures means one of two very different things: we are being throttled (cool
+# down and carry on) or the session is gone for good (spent SSO credential and
+# nobody around to scan the QR). Counting failures cannot tell them apart, and
+# guessing wrong is expensive either way — aborting on throttling loses a
+# perfectly good run, while sleeping through a dead session burns minutes per
+# uid before giving up. So after this many failures in a row we simply ASK the
+# Auth object which one it is.
+_SESSION_PROBE_AFTER = 5
+
+# Soft rate-limit handling: how many consecutive failures earn a long pause.
+_COOLDOWN_EVERY = 5
+_COOLDOWN_SECONDS = 60
+
 
 def _verify_pending(auth, pending):
     """Classify a batch of visits; returns (done, verified, lookup_ok).
@@ -347,7 +367,9 @@ def _visit_list(auth, owner_uid, kind, uids, args, force=False):
     verified_total = 0
     updated_total = 0
     start = time.time()
-    consec_rl = 0
+    consec_rl = 0      # failures since the last cool-down pause
+    consec_fail = 0    # failures since the last success (session-probe guard)
+    aborted = False
     for i, u in enumerate(todo, 1):
         status, user = visit_one(auth, u)
         stats[status] = stats.get(status, 0) + 1
@@ -356,12 +378,29 @@ def _visit_list(auth, owner_uid, kind, uids, args, force=False):
             profile_updates[str(u)] = user
         if status == 'ratelimited':
             consec_rl += 1
-            if consec_rl >= 5:
-                print('  rate-limited %d times in a row; pausing 60s...' % consec_rl)
-                time.sleep(60)
+            consec_fail += 1
+            if consec_fail >= _SESSION_PROBE_AFTER:
+                # `_request_json` re-logs in on its own, so a streak this long
+                # is throttling or a session that will not come back. Ask once:
+                # a live session proves throttling, a dead one means nobody is
+                # scanning and every remaining uid would fail too. Stopping here
+                # keeps the progress already saved, so a later run — after a
+                # manual login — resumes from it instead of re-doing the list.
+                if not auth.ensure_session():
+                    print('\n  aborting: %d consecutive failures and the session '
+                          'could not be recovered. Log in again, then re-run to '
+                          'resume from the saved progress.' % consec_fail)
+                    aborted = True
+                    break
+                consec_fail = 0
+            if consec_rl >= _COOLDOWN_EVERY:
+                print('  rate-limited %d times in a row; pausing %ds...'
+                      % (consec_rl, _COOLDOWN_SECONDS))
+                time.sleep(_COOLDOWN_SECONDS)
                 consec_rl = 0
         else:
             consec_rl = 0
+            consec_fail = 0
             if status == 'banned':
                 print('  banned/blocked uid %s - skipped for this run' % u)
 
@@ -402,7 +441,8 @@ def _visit_list(auth, owner_uid, kind, uids, args, force=False):
             owner_uid, kind, profile_updates)
         profile_updates = {}
 
-    print('\n[profile-visit] DONE list=%s' % kind)
+    print('\n[profile-visit] %s list=%s'
+          % ('ABORTED' if aborted else 'DONE', kind))
     print('  attempted           : %d' % len(todo))
     print('  ok=%d  ratelimited=%d  banned=%d'
           % (stats['ok'], stats['ratelimited'], stats['banned']))
@@ -455,9 +495,11 @@ def run_visit(auth, kind, args):
     explicit_uids = [u.strip() for u in (getattr(args, 'uids', '') or '').split(',')
                      if u.strip()]
 
-    # --uids: force-run exactly those uids, ignoring saved progress.
+    # --uids: force-run exactly those uids, ignoring saved progress. Use a
+    # dedicated `uids` progress file so these one-off retries never pollute the
+    # per-list (following/fans) progress used by the full traversal.
     if explicit_uids:
-        return _visit_list(auth, owner_uid, 'following', explicit_uids, args,
+        return _visit_list(auth, owner_uid, 'uids', explicit_uids, args,
                            force=True)
 
     kinds = ['following', 'fans'] if kind == 'both' else [kind]

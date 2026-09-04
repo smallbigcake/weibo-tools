@@ -83,7 +83,7 @@ _setup_logging()
 
 # Reuse the proven request engine (backoff, soft-rate-limit handling, session
 # auto-recovery) and its polite delay for both endpoints.
-from weibo_tool.commands.blacklist_deep import (
+from weibo_tool.http_engine import (
     _request_json, _sleep, _try_recover_session)
 
 DATA_ROOT = os.path.join(_SRC_DIR, 'data', 'relations')
@@ -395,6 +395,11 @@ def fetch_following(auth, uid, max_pages=100000, resume=False, verbose=True):
         if not next_cursor:
             stop_reason = 'no_more_pages'
             break
+        if next_cursor == cursor:
+            # The server echoed the same cursor: no forward progress, so the list
+            # is exhausted (or stuck). Stop rather than looping to max_pages.
+            stop_reason = 'no_more_pages'
+            break
         cursor = next_cursor
         page += 1
         if verbose and pages_ok % 10 == 0:
@@ -458,6 +463,7 @@ def fetch_fans(auth, uid, max_pages=100000, resume=False, verbose=True):
     hop = 0
     while hop < max_pages:
         hop += 1
+        prev_len = len(mobile_records)
         url = MOBILE_FANS_API % uid
         if since:
             url += '&since_id=%s' % since
@@ -487,6 +493,12 @@ def fetch_fans(auth, uid, max_pages=100000, resume=False, verbose=True):
             mobile_stop = 'no_more_pages'
             break
         since = new_since
+        # The container paginates by since_id, but a stuck endpoint can advance
+        # the id while returning the same users. Stop once a hop adds no new uid
+        # so we don't spin to max_pages on a looping server.
+        if len(mobile_records) == prev_len:
+            mobile_stop = 'no_more_pages'
+            break
         if verbose and mobile_pages_ok % 25 == 0:
             print('  [fans-mobile] %d collected (hop %d)'
                   % (len(mobile_records), hop))
@@ -598,15 +610,29 @@ def _fetch_web_fans(auth, uid, sort_type, max_pages, resume, verbose):
                         recovered = True
                         break
                 if recovered:
-                    page = (next_page if isinstance(next_page, int)
-                            else page + 1)
+                    new_page = (next_page if isinstance(next_page, int)
+                                else page + 1)
+                    # Guard against a server that echoes the SAME page number:
+                    # without this the loop would run to max_pages forever
+                    # (effectively a hang). Stop when the next page is not
+                    # strictly ahead of the one just fetched.
+                    if new_page <= page:
+                        stop = 'no_more_pages'
+                        break
+                    page = new_page
                     continue
             stop = 'no_more_pages'
             break
         if not users:
             stop = 'empty_page'
             break
-        page = next_page if isinstance(next_page, int) else page + 1
+        new_page = next_page if isinstance(next_page, int) else page + 1
+        if new_page <= page:
+            # No forward progress -> the server is looping; bail out instead of
+            # spinning through every remaining page up to max_pages.
+            stop = 'no_more_pages'
+            break
+        page = new_page
         if verbose and pages_ok % 25 == 0:
             print('  [fans-web/%s] %d rich collected (page %d, server total %s)'
                   % (sort_type, len(records), page, total_number))

@@ -59,8 +59,19 @@ def main(argv=None):
         # --uid given but no saved session: the subcommand cannot proceed.
         return 1
 
-    args.run(args, auth)
-    return 0
+    rc = args.run(args, auth)
+    # Propagate the subcommand's exit code so a failed run (no session, no
+    # snapshot, ...) is visible to the shell / scheduler. Most subcommands
+    # simply `return` (None) on success, which must stay a successful exit; a
+    # truthy non-int (e.g. an error string) is treated as failure.
+    if rc is None or rc is True:
+        return 0
+    if rc is False:
+        return 1
+    try:
+        return int(rc)
+    except (TypeError, ValueError):
+        return 1
 
 
 if __name__ == '__main__':

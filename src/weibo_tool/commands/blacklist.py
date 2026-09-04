@@ -4,6 +4,7 @@ Reuses the analysis logic from src/blacklist_analyzer.py so there is a single
 source of truth for the blacklist query/summary.
 """
 import argparse
+import json
 import os
 import sys
 
@@ -37,7 +38,6 @@ def run(args, auth):
     print_report(summary, users)
 
     if args.json:
-        import json
         out = {'summary': summary, 'users': users}
         with open(args.json, 'w', encoding='utf-8') as f:
             json.dump(out, f, ensure_ascii=False, indent=2)

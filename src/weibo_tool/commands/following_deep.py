@@ -42,24 +42,32 @@ from weibo_tool.commands.blacklist_deep import (
     write_summary_md, _extract_interests_from_posts,
     POST_DIR, _load_json, _save_json, FOLLOW_API,
 )
+from weibo_tool.http_engine import _request_json, _sleep
 
 # Separate cache + data dirs so this baseline never mixes with the blacklist
 # data (same engine, different subject semantics -> keep them apart).
 CACHE_DIR = os.path.join(_SRC_DIR, '.cache', 'following_deep')
 PROFILE_DIR = os.path.join(CACHE_DIR, 'profiles')
+# Per-followed-user follow lists: for each account the subject follows, the
+# list of accounts THAT account follows.
 FOLLOW_DIR = os.path.join(CACHE_DIR, 'follows')
+# The subject's OWN following list (the control-group roster). It MUST NOT live
+# in FOLLOW_DIR: `top-followed --source following` treats every file there as
+# "one person's follow list", so a roster sitting in it would add a phantom +1
+# to every uid it contains and skew the whole baseline ranking.
+LISTS_DIR = os.path.join(CACHE_DIR, 'lists')
 POST_DIR_F = os.path.join(CACHE_DIR, 'posts')
 DATA_DIR = os.path.join(_SRC_DIR, 'data', 'following_deep')
 
 
 def _ensure_dirs():
-    for d in (CACHE_DIR, PROFILE_DIR, FOLLOW_DIR, POST_DIR_F, DATA_DIR):
+    for d in (CACHE_DIR, PROFILE_DIR, FOLLOW_DIR, LISTS_DIR, POST_DIR_F, DATA_DIR):
         os.makedirs(d, exist_ok=True)
 
 
 def _following_cache_path(uid):
     _ensure_dirs()
-    return os.path.join(FOLLOW_DIR, '%s.json' % uid)
+    return os.path.join(LISTS_DIR, '%s.json' % uid)
 
 
 def _profile_cache_path(uid):
@@ -86,7 +94,6 @@ def fetch_following_list(auth, uid, force=False):
     page = 1
     total_seen = 0
     while True:
-        from weibo_tool.commands.blacklist_deep import _request_json, _sleep
         obj = _request_json(auth, FOLLOW_API % (uid, page))
         _sleep()
         if obj is None:
