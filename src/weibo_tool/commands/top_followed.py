@@ -37,6 +37,7 @@ from auth import Auth
 from weibo_tool.commands.blacklist_deep import (
     fetch_profile, _profile_cache_path, _ensure_dirs,
 )
+from weibo_tool.verified_config import exclusion_lists
 
 CACHE_DIR = os.path.join(_SRC_DIR, '.cache', 'blacklist_deep')
 FOLLOW_DIR = os.path.join(CACHE_DIR, 'follows')
@@ -58,75 +59,15 @@ FOLLOWING_DATA_DIR = os.path.join(_SRC_DIR, 'data', 'following_deep')
 #   1. Weibo platform official operation accounts (微博官方运营号).
 #   2. Party-media / government / news accounts (党媒/政务/新闻).
 #
-# These are identified by screen_name heuristics. The lists are maintained in a
-# standalone JSON data file (config/account_categories.json) so they can be
-# edited without touching code; this module loads that file at runtime and
-# falls back to the built-in DEFAULT_* below if the file is missing.
+# Identified by screen_name heuristics. The lists now live in the SAME single
+# source of truth as the verified-type mapping: config/verified_categories.json
+# (loaded via weibo_tool.verified_config). Editing those lists no longer
+# requires touching code; built-in defaults in verified_config keep things
+# working if the file is missing.
 # ---------------------------------------------------------------------------
 
-# Built-in fallback (kept in sync with config/account_categories.json).
-_DEFAULT_WEIBO_OFFICIAL_PREFIX = ['微博']
-_DEFAULT_WEIBO_OFFICIAL_EXACT = {
-    '粉丝红包', '超话社区', 'SVIP内容精选', '微博小秘书', '微博公开度',
-    '微博创作者广告共享计划', '微博抽奖平台',
-}
-_DEFAULT_STATE_MEDIA_KEYWORDS = (
-    '央视', '新华', '人民', '澎湃', '环球', '共青团', '政府', '军号', '战区',
-    '新闻', '日报', '时报', '晚报', '早报', '封面', '新黄河', '半月谈', '广电',
-    '电视台', '融媒', '军网', '解放军', '国防部', '时政', '新闻网', '党媒',
-    '宣传部', '网信', '观察者网',  # 观察者网 is a known 时政 outlet
-    '报',  # bare "报" catches remaining newspaper names (e.g. 大河报, 华商报)
-)
-_DEFAULT_STATE_MEDIA_EXACT = {
-    '玉渊谭天', '新浪热点', '新浪财经', '新浪新闻', '央视网', '人民网',
-    '中国新闻网', '新华网', '凤凰网', '凤凰周刊', '凤凰网国际', '北京青年报',
-    '北京日报', '中国军号', '中国火箭军', '东部战区', '联合国', '中国政府网',
-    '北京时间', '天涯历知幸',
-    '新京报', '新京报我们视频', '大河报', '南方周末', '南方都市报', '潇湘晨报',
-    '都市快报', '华商报', '中国青年报', '财新网', 'Vista看天下',
-    '中国历史研究院', '中国警方在线', '中国气象爱好者', '中国地震台网速报',
-    '中国军工', '中国反邪教', '中国国家地理', '中国航空工业集团',
-    '央广网', '凤凰网财经', '凤凰网科技', '财经网', '日经中文网',
-    '央广军事', '贝壳财经',
-    '新浪军事', '新浪证券', '新浪科技', '新浪娱乐', '新浪仓石基金',
-}
-
-_CATEGORY_FILE = os.path.join(
-    os.path.dirname(_SRC_DIR), 'config', 'account_categories.json')
-
-
-def _load_categories():
-    """Load category lists from the JSON data file, falling back to defaults.
-
-    Returns (weibo_official_prefix, weibo_official_exact, state_media_keywords,
-    state_media_exact) as Python sets/lists.
-    """
-    prefix = list(_DEFAULT_WEIBO_OFFICIAL_PREFIX)
-    exact_official = set(_DEFAULT_WEIBO_OFFICIAL_EXACT)
-    keywords = list(_DEFAULT_STATE_MEDIA_KEYWORDS)
-    exact_media = set(_DEFAULT_STATE_MEDIA_EXACT)
-    if os.path.exists(_CATEGORY_FILE):
-        try:
-            with open(_CATEGORY_FILE, 'r', encoding='utf-8-sig') as fh:
-                data = json.load(fh)
-            wo = data.get('weibo_official', {})
-            prefix = list(wo.get('prefix', prefix))
-            exact_official = set(wo.get('exact', exact_official))
-            sm = data.get('state_media', {})
-            keywords = list(sm.get('keywords', keywords))
-            exact_media = set(sm.get('exact', exact_media))
-            logging.info('[top-followed] loaded account categories from %s '
-                         '(%d official-exact, %d media-exact, %d media-keywords)'
-                         % (_CATEGORY_FILE, len(exact_official),
-                            len(exact_media), len(keywords)))
-        except Exception as e:
-            logging.warning('[top-followed] failed to load %s (%s); using '
-                            'built-in defaults.' % (_CATEGORY_FILE, e))
-    return prefix, exact_official, keywords, exact_media
-
-
 (_WEIBO_OFFICIAL_PREFIX, _WEIBO_OFFICIAL_EXACT,
- _STATE_MEDIA_KEYWORDS, _STATE_MEDIA_EXACT) = _load_categories()
+ _STATE_MEDIA_KEYWORDS, _STATE_MEDIA_EXACT) = exclusion_lists()
 
 
 def _is_weibo_official(name):

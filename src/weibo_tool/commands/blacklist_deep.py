@@ -40,6 +40,9 @@ if _SRC_DIR not in sys.path:
 from logutil import setup as _setup_logging
 _setup_logging()
 
+# Config-driven interpretation of Weibo's verified* fields (single source of truth).
+from weibo_tool.verified_config import verified_type_label
+
 CACHE_DIR = os.path.join(_SRC_DIR, '.cache', 'blacklist_deep')
 PROFILE_DIR = os.path.join(CACHE_DIR, 'profiles')
 FOLLOW_DIR = os.path.join(CACHE_DIR, 'follows')
@@ -108,17 +111,10 @@ def _norm_region(loc):
     return loc.strip().split()[0] or 'unknown'
 
 
-def _verified_label(verified, vtype, vreason):
-    if not verified:
-        return 'none'
-    # verified_type: 0=个人认证(yellow V), others-> often org/blue V; negative-> 达人
-    if vtype is None:
-        return 'verified'
-    if vtype == 0:
-        return 'personal_v'  # yellow V (individual)
-    if vtype > 0:
-        return 'org_v'       # blue V (organization/brand)
-    return 'daren'           # negative verified_type -> 达人
+def _verified_label(verified, vtype, vreason=None):
+    # Delegates to the config-driven mapping in weibo_tool.verified_config so the
+    # verified_type -> label rules live in config/verified_categories.json.
+    return verified_type_label(verified, vtype)
 
 
 # ---------------------------------------------------------------------------

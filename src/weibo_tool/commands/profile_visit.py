@@ -36,6 +36,12 @@ The uid lists come from the relation snapshots written by `relations_sync`
 (`data/relations/<uid>/{following,fans}.json`). The fans snapshot only holds
 the portion Weibo's API exposes, so that is the portion that gets visited.
 
+Organization accounts (blue V: enterprise / official / government / media, i.e.
+verified_type > 0) are skipped BEFORE any request is sent — only personal accounts
+(黄V / 达人 / 普通用户) get visited. The policy lives in
+config/verified_categories.json (`profile_visit.skip_organization`); override per
+run with --include-org.
+
 Usage (from src/):
     python weibo-tool.py profile-visit --user cake --kind following
     python weibo-tool.py profile-visit --user cake --kind fans
@@ -61,6 +67,7 @@ from weibo_tool.http_engine import (
     _sleep, _is_ban_response, _is_account_issue, _request_json)
 from weibo_tool.commands.relations_sync import (
     _load_json, _save_json, _now_iso, run_following, run_fans)
+from weibo_tool.verified_config import is_organization, should_skip_organization
 
 DATA_ROOT = os.path.join(_SRC_DIR, 'data', 'relations')
 CACHE_ROOT = os.path.join(_SRC_DIR, '.cache', 'profile_visit')
@@ -85,22 +92,29 @@ def _snapshot_path(uid, kind):
 
 
 def _load_uids(uid, kind):
-    """Return (uid_list, None) or (None, error_msg) for a relation snapshot."""
+    """Return (uid_list, user_by_uid, None) or (None, None, error_msg).
+
+    The relation snapshot stores the FULL user object, so we also hand back a
+    uid -> record map. That lets callers filter (e.g. skip organization accounts
+    in profile-visit) using verified/verified_type WITHOUT an extra API call.
+    """
     path = _snapshot_path(uid, kind)
     if not os.path.exists(path):
-        return None, 'snapshot missing: %s (run %s-sync first)' % (path, kind)
+        return None, None, 'snapshot missing: %s (run %s-sync first)' % (path, kind)
     payload = _load_json(path, {})
     users = payload.get('users') or []
     seen = set()
     out = []
+    by_uid = {}
     for r in users:
         u = str(r.get('uid')) if r.get('uid') else None
         if u and u not in seen:
             seen.add(u)
             out.append(u)
+            by_uid[u] = r
     if not out:
-        return None, 'snapshot %s has no users (run %s-sync first)' % (path, kind)
-    return out, None
+        return None, None, 'snapshot %s has no users (run %s-sync first)' % (path, kind)
+    return out, by_uid, None
 
 
 def _progress_path(uid, kind):
@@ -339,9 +353,10 @@ def _visit_list(auth, owner_uid, kind, uids, args, force=False):
     regardless of progress (used by --uids).
     """
     progress_path = _progress_path(owner_uid, kind)
-    if args.reset and os.path.exists(progress_path):
+    if args.new and os.path.exists(progress_path):
         os.remove(progress_path)
-        print('[profile-visit] reset progress for %s/%s' % (owner_uid, kind))
+        print('[profile-visit] cleared progress for %s/%s (new round)'
+              % (owner_uid, kind))
 
     done = _load_visited(progress_path)
     uid_set = set(uids)
@@ -357,7 +372,7 @@ def _visit_list(auth, owner_uid, kind, uids, args, force=False):
           % (kind, len(uids), len(done_here), len(todo),
              '  (force)' if force else ''))
     if not todo:
-        print('  list "%s" fully visited (%d/%d). Use --reset for a new round.'
+        print('  list "%s" fully visited (%d/%d). Use --new for a new round.'
               % (kind, len(done_here), len(uids)))
         return 0
 
@@ -422,8 +437,6 @@ def _visit_list(auth, owner_uid, kind, uids, args, force=False):
             updated_total += _apply_profile_updates(
                 owner_uid, kind, profile_updates)
             profile_updates = {}
-
-        _sleep()  # polite delay between visits
 
     if pending:
         newly, verified_now, ok = _verify_pending(auth, pending)
@@ -510,12 +523,29 @@ def run_visit(auth, kind, args):
 
     lists = []
     missing = []
+    include_org = getattr(args, 'include_org', False)
+    skip_org = should_skip_organization() and not include_org
     for k in kinds:
-        uids, err = _load_uids(owner_uid, k)
+        uids, user_by_uid, err = _load_uids(owner_uid, k)
         if uids is None:
             missing.append((k, err))
             continue
-        lists.append((k, uids))
+        if skip_org:
+            personal = []
+            org_count = 0
+            for u in uids:
+                rec = user_by_uid.get(u) or {}
+                if is_organization(rec.get('verified'), rec.get('verified_type')):
+                    org_count += 1
+                    continue
+                personal.append(u)
+            if org_count:
+                print('  (note) %s: skipped %d organization account(s) '
+                      '(enterprise / official / government / media).'
+                      % (k, org_count))
+            lists.append((k, personal))
+        else:
+            lists.append((k, uids))
     if not lists:
         print('No relation snapshots available. Run following-sync / fans-sync first:')
         for k, e in missing:
@@ -542,9 +572,9 @@ def register(subparsers, parents=None):
     p.add_argument('--limit', type=int, default=0,
                    help='Max profiles to visit per list this run (0 = all '
                         'remaining; progress is saved so you can resume later).')
-    p.add_argument('--reset', action='store_true',
+    p.add_argument('--new', action='store_true',
                    help='Clear the saved progress of the selected list(s) and '
-                        'start the traversal over from the beginning.')
+                        'start the traversal over from the beginning (a new round).')
     p.add_argument('--uids', type=str, default='',
                    help='Comma-separated explicit uids to visit. Force-runs these '
                         'regardless of saved progress (used to retry specific '
@@ -560,6 +590,10 @@ def register(subparsers, parents=None):
     p.add_argument('--update-profile', action='store_true',
                    help='Refresh each stored snapshot record from the data the '
                         'visit request already returns (no extra API calls).')
+    p.add_argument('--include-org', action='store_true',
+                   help='Also visit organization (blue-V: enterprise / official / '
+                        'government / media) accounts, overriding the configured '
+                        'skip_organization policy.')
     p.set_defaults(run=run_profile_visit)
 
 
