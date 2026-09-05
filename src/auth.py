@@ -1,8 +1,11 @@
 import json
 import os
+import re
+import glob
 import random
 import uuid
 import io
+import argparse
 from urllib.parse import parse_qs, urlparse, urlencode
 
 import time
@@ -10,19 +13,49 @@ import qrcode
 import requests
 
 import logging
-from logging import config
 
-# logging.ini contains relative handler paths (log/weibo.log). Resolve them
-# relative to this file's directory so auth.py works regardless of CWD.
-_logging_cfg_dir = os.path.dirname(os.path.abspath(__file__))
-_prev_cwd = os.getcwd()
-os.chdir(_logging_cfg_dir)
-try:
-    logging.config.fileConfig('config/logging.ini')
-finally:
-    os.chdir(_prev_cwd)
+# Shared logging setup (config/logging.ini, relative to this file). Idempotent.
+from logutil import setup as _setup_logging
+_setup_logging()
 
-COOKIE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.weibo')
+# Multi-user support: each identity stores its cookies in its own file
+# `cookies.<uid>.weibo` under the same directory. The UID is the numeric Weibo
+# user id, captured after a successful login so every account's session is
+# stored (and looked up) by its real UID. A human-friendly `--user` label may
+# be supplied instead and is resolved to a UID at save time. A legacy single-user
+# `cookies.weibo` is still readable for backward compatibility (see Auth.load),
+# but new saves always use the per-UID path.
+COOKIE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def user_cookie_path(uid):
+    """Absolute path of the cookie jar for a given UID. The UID is always part
+    of the file name so every account's session is stored separately."""
+    return os.path.join(COOKIE_DIR, 'cookies.%s.weibo' % (uid or 'default'))
+
+
+def legacy_cookie_path():
+    """Path of the pre-multi-user single cookie jar (read-only fallback)."""
+    return os.path.join(COOKIE_DIR, 'cookies.weibo')
+
+
+# Label -> UID mapping so that `--user <label>` (a human-friendly alias chosen
+# at first login) can be resolved back to the real UID-named cookie file on
+# later runs, instead of forcing a fresh QR login every time.
+LABEL_MAP_PATH = os.path.join(COOKIE_DIR, 'cookies.labels.json')
+
+
+def _load_label_map():
+    try:
+        with open(LABEL_MAP_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _save_label_map(mapping):
+    with open(LABEL_MAP_PATH, 'w', encoding='utf-8') as f:
+        json.dump(mapping, f, ensure_ascii=False, indent=2)
 
 WEIBO_HOME_URL = 'https://weibo.com'
 
@@ -78,10 +111,116 @@ RET_CODE_QR_EXCEPTION = 50114015
 
 
 class Auth(object):
-    def __init__(self):
+    def __init__(self, uid=None, user=None):
+        # `uid` is the numeric Weibo id; `user` is an optional human label.
+        # When login is successful the real UID is fetched and takes precedence
+        # for the cookie file name. Before that, `user` acts as a label.
+        self.uid = None
+        self.label = user or 'default'
         self.cookies = []
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': USER_AGENT})
+
+    @staticmethod
+    def list_uids():
+        """Return the list of known UIDs (from cookies.<uid>.weibo)."""
+        uids = []
+        for f in glob.glob(os.path.join(COOKIE_DIR, 'cookies.*.weibo')):
+            m = re.match(r'cookies\.(.+)\.weibo$', os.path.basename(f))
+            if m:
+                uids.append(m.group(1))
+        return sorted(uids)
+
+    def resolve_uid(self, args_uid=None, args_user=None, prompt=True):
+        """Pick the active identity.
+
+        Either `--uid` (a numeric UID) or `--user` (a label) may be given;
+        exactly one is enough.
+
+        Precedence:
+          1. `--uid` if that UID already has a saved cookie file -> use it.
+          2. `--user` if that label has not logged in yet -> will log in fresh,
+             UID resolved after the scan.
+          3. interactive menu over existing UIDs when `prompt=True`.
+
+        If `--uid` is given but no matching cookie file exists, prints an error
+        and returns False so the caller can fall back to a `--user` login.
+        """
+        if args_uid:
+            if os.path.exists(user_cookie_path(args_uid)):
+                self.uid = args_uid
+                logging.info('Using saved session for UID %s.' % args_uid)
+                return True
+            logging.error('UID %s has no saved session. Use --user to log in first.'
+                          % args_uid)
+            return False
+        if args_user:
+            self.label = args_user
+            # If this label was used before, resolve it to the real UID so we
+            # reuse the existing cookie file instead of forcing a fresh login.
+            mapped_uid = _load_label_map().get(args_user)
+            if mapped_uid and os.path.exists(user_cookie_path(mapped_uid)):
+                self.uid = mapped_uid
+                logging.info('Resolved label "%s" -> UID %s (saved session).'
+                             % (args_user, mapped_uid))
+            return True
+        uids = self.list_uids()
+        if not uids:
+            self.label = 'default'
+            return True
+        if not prompt:
+            self.uid = uids[0]
+            return True
+        try:
+            print('Select a Weibo user identity:')
+            for i, u in enumerate(uids, 1):
+                print('  %d. %s' % (i, u))
+            choice = input('UID # or value [default=%s]: ' % uids[0]).strip()
+        except (EOFError, OSError):
+            self.uid = uids[0]
+            return True
+        if choice == '':
+            self.uid = uids[0]
+            return True
+        if choice.isdigit():
+            idx = int(choice)
+            if 1 <= idx <= len(uids):
+                self.uid = uids[idx - 1]
+                return True
+        # An arbitrary string is treated as a new label to log in as.
+        self.label = choice or 'default'
+        return True
+
+    def _fetch_uid(self):
+        """Fetch the real numeric UID of the logged-in account.
+
+        Parses `window.$CONFIG.user.id` from the weibo.com landing page. Returns
+        the UID string, or None if it cannot be determined.
+        """
+        try:
+            resp = self._request('GET', WEIBO_HOME_URL + '/', allow_redirects=True)
+        except Exception as e:
+            logging.warning(f'_fetch_uid: request failed: {e}')
+            return None
+        m = re.search(r'window\.\$CONFIG\s*=\s*\{.*?user\s*:\s*\{[^}]*?id\s*:\s*[\'"]?(\d+)',
+                      resp.text, re.DOTALL)
+        if m:
+            return m.group(1)
+        # Fallback: look for $CONFIG as JSON and read user.id.
+        m = re.search(r'window\.\$CONFIG\s*=\s*(\{.*?\});', resp.text, re.DOTALL)
+        if m:
+            try:
+                cfg = json.loads(m.group(1))
+                uid = cfg.get('user', {}).get('id')
+                if uid:
+                    return str(uid)
+            except (json.JSONDecodeError, ValueError):
+                pass
+        logging.warning('_fetch_uid: could not locate UID in landing page.')
+        return None
+
+    def _cookie_path(self):
+        return user_cookie_path(self.uid or self.label)
 
     def _request(self, method, url, **kwargs):
         """Centralized HTTP wrapper: performs the request via the shared session
@@ -118,6 +257,14 @@ class Auth(object):
             loc = resp.headers.get('Location')
             lines.append(f'      Location: {loc}')
         logging.info('\n'.join(lines))
+
+        # Anomaly: non-2xx. Surface the full response (headers + body) at WARNING
+        # regardless of the global level, so we can see what the server actually
+        # said without flipping on DEBUG everywhere.
+        if resp.status_code >= 400 or resp.status_code in (301, 302, 303, 307, 308):
+            from logutil import dump_response
+            dump_response(resp, label='request helper: unexpected status %s'
+                          % resp.status_code)
 
         # ---- DEBUG: the whole request+response as ONE log entry (newline-separated) ----
         parts = [f'HTTP {method} {req.url}']
@@ -382,7 +529,18 @@ class Auth(object):
 
 
     def save_cookies(self):
-        logging.info('Saving cookies to disk.')
+        # Resolve the real UID for file naming (after a successful scan).
+        if not self.uid:
+            self.uid = self._fetch_uid()
+        identity = self.uid or self.label
+        logging.info('Saving cookies for "%s" to disk.' % identity)
+        # Remember label -> UID so a later `--user <label>` reuses this session.
+        if self.uid and self.label and self.label != self.uid:
+            mapping = _load_label_map()
+            if mapping.get(self.label) != self.uid:
+                mapping[self.label] = self.uid
+                _save_label_map(mapping)
+                logging.info('Mapped label "%s" -> UID %s.' % (self.label, self.uid))
         cookies_data = []
         for cookie in self.session.cookies:
             cookies_data.append({
@@ -395,16 +553,17 @@ class Auth(object):
                 'http_only': bool(getattr(cookie, 'has_nonstandard_attr', lambda x: False)('HttpOnly') or
                                  getattr(cookie, '_rest', {}).get('HttpOnly') is not None),
             })
+        path = self._cookie_path()
         # Diff against what was on disk to report what changed (updated keys).
         try:
-            with open(COOKIE_PATH, 'r', encoding='utf-8') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 prev = {c['name'] + '@' + c.get('domain', '') for c in json.load(f)}
         except (FileNotFoundError, json.JSONDecodeError):
             prev = set()
         curr = {c['name'] + '@' + c.get('domain', '') for c in cookies_data}
         updated = sorted(curr & prev)
         added = sorted(curr - prev)
-        with open(COOKIE_PATH, 'w', encoding='utf-8') as f:
+        with open(path, 'w', encoding='utf-8') as f:
             json.dump(cookies_data, f, ensure_ascii=False, indent=2)
         logging.info(f'Saved {len(cookies_data)} cookies.\n'
                      f'  keys: {_describe_cookies(self.session.cookies)}\n'
@@ -649,10 +808,47 @@ class Auth(object):
                      f"  auth-state: {_fmt_auth_cookie_state(now, state)}")
         return False
 
+    def ensure_session(self):
+        """Auto-recover a live session. Returns True if a logged-in session is
+        now available.
+
+        Recovery order:
+          1. already logged in? (test_login) — nothing to do.
+          2. silent SSO `renew()` — replays the crossdomain chain with the
+             long-lived SCF cookie to re-mint short-term SUB/ALF without any
+             QR scan. Covers the common case where only the short-term session
+             cookie expired while the TGT is still valid.
+          3. full QR `login()` as a last resort (needs a human scan; in a
+             headless run it blocks on the QR window / os.startfile until
+             scanned, then resumes).
+
+        This is the hook the crawl layer calls whenever it detects a login
+        failure (ok:-100 / redirect to login.php), so an unattended run keeps
+        going instead of silently producing empty caches.
+        """
+        if self.test_login():
+            return True
+        logging.warning('Session not logged in; attempting silent SSO renew...')
+        if self.renew():
+            logging.info('ensure_session: silent SSO renew succeeded.')
+            return True
+        logging.warning('ensure_session: SSO renew failed (long-term credential '
+                        'likely spent); falling back to QR login (needs a scan).')
+        self.login()
+        return self.test_login()
+
     def load(self):
-        logging.info('Loading cookies from disk.')
+        logging.info('Loading cookies for "%s" from disk.' % (self.uid or self.label))
+        path = self._cookie_path()
+        # Backward compatibility: if the per-user file is missing but the legacy
+        # single-user `cookies.weibo` exists, read from it (new saves still go
+        # to the per-user path).
+        if not os.path.exists(path) and os.path.exists(legacy_cookie_path()):
+            logging.info('No per-user cookie file; falling back to legacy %s.'
+                         % os.path.basename(legacy_cookie_path()))
+            path = legacy_cookie_path()
         try:
-            with open(COOKIE_PATH, 'r', encoding='utf-8') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 cookies_data = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             logging.info('No valid cookie file found.')
@@ -926,6 +1122,7 @@ class _QRWindow:
             self._qr_id = qr_id
             path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                '..', 'tmp', 'weibo_qr.png')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             img.save(path)
             logging.info(f'QR round {self._round}/{max_rounds} (headless): '
                          f'open {path} to scan.')
@@ -951,15 +1148,32 @@ class _QRWindow:
 
 
 def main():
+    ap = argparse.ArgumentParser(description='Weibo login (multi-user).')
+    ap.add_argument('--uid', default=None,
+                    help='Numeric Weibo UID. If a saved session exists it is reused; '
+                         'otherwise an error is shown. Mutually exclusive in use '
+                         'with --user (only one needed).')
+    ap.add_argument('--user', default=None,
+                    help='Human-friendly login label. Used when logging in for the '
+                         'first time; the real UID is captured after the scan.')
+    ap.add_argument('--no-prompt', action='store_true',
+                    help='Do not prompt; use the only/existing identity or "default".')
+    args = ap.parse_args()
+
     auth = Auth()
+    if not auth.resolve_uid(args.uid, args_user=args.user, prompt=not args.no_prompt):
+        # --uid given but no saved session: instruct the user and exit.
+        return
     auth.load()
     if auth.test_login():
-        logging.info('Already logged in.')
+        logging.info('Already logged in as "%s".' % (auth.uid or auth.label))
         return
     # Try a silent renewal (uses long-term SCF cookie) before a full QR login.
     if auth.renew():
+        logging.info('Session renewed for "%s".' % (auth.uid or auth.label))
         return
     auth.login()
+    logging.info('Login complete for "%s".' % (auth.uid or auth.label))
 
 
 

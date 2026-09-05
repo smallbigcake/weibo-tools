@@ -18,6 +18,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Configure logging to also write to test/log/.
 import logging
+from logutil import setup as _setup_logging
+_setup_logging()
 Timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 def setup_file_log(mode: str):
@@ -35,18 +37,25 @@ def setup_file_log(mode: str):
     return log_path
 
 
-def clear_cookies():
-    # COOKIE_PATH is resolved inside auth.py relative to its own file (src/cookies.weibo).
-    cookie_path = os.path.join(os.path.dirname(__file__), '..', 'cookies.weibo')
+def clear_cookies(uid):
+    # Cookie path is resolved inside auth.py per UID (src/cookies.<uid>.weibo).
+    from auth import user_cookie_path
+    cookie_path = user_cookie_path(uid)
     if os.path.exists(cookie_path):
         os.remove(cookie_path)
-        logging.info(f'Cleared cookies: {cookie_path}')
+        logging.info(f'Cleared cookies for "{uid}": {cookie_path}')
     else:
         logging.info('No cookie file to clear.')
 
 
 def main():
     ap = argparse.ArgumentParser(description='Weibo login test runner')
+    ap.add_argument('--uid', default=None,
+                    help='Numeric Weibo UID. Reuses a saved session if present.')
+    ap.add_argument('--user', default=None,
+                    help='Human-friendly login label used when logging in fresh.')
+    ap.add_argument('--no-prompt', action='store_true',
+                    help='Do not prompt; use existing/default identity.')
     ap.add_argument('--fresh', action='store_true',
                     help='Clear cookies and force a full QR login from scratch.')
     ap.add_argument('--rounds', type=int, default=5,
@@ -59,12 +68,14 @@ def main():
     from auth import Auth
 
     auth = Auth()
+    if not auth.resolve_uid(args.uid, args_user=args.user, prompt=not args.no_prompt):
+        return
     if args.fresh:
-        clear_cookies()
+        clear_cookies(auth.uid or auth.label)
 
     auth.load()
     if auth.test_login():
-        logging.info('Already logged in — nothing to do.')
+        logging.info('Already logged in as "%s" — nothing to do.' % (auth.uid or auth.label))
         return
 
     if not args.fresh and auth.renew():
@@ -72,8 +83,8 @@ def main():
         return
 
     # Full QR login.
-    logging.info('Starting full QR login. A window will open — scan the QR code '
-                 'with the Weibo app, then confirm.')
+    logging.info('Starting full QR login for "%s". A window will open — scan the '
+                 'QR code with the Weibo app, then confirm.' % (auth.uid or auth.label))
     auth.login(max_rounds=args.rounds)
     logging.info('Login test finished successfully.')
 

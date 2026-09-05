@@ -1,0 +1,72 @@
+{
+  "_comment": "Single source of truth for interpreting Weibo's verified* user fields. Both blacklist_deep and top_followed read from this one file (via weibo_tool/verified_config.py); edit here instead of hard-coding in code. The verified_type/ext/level mappings are Weibo-version dependent and partly heuristic — update the lists as Weibo changes them; codes that are not listed resolve to the unknown_label instead of being mislabelled.",
+
+  "verified_type": {
+    "_comment": "Coarse verified-type -> label. Rules applied by verified_type_label(): (1) not verified -> unverified_label; (2) verified but type is null -> unclassified_label; (3) type in 'personal' -> 'personal_v'; (4) type > 0 -> 'org_v'; (5) type < 0 -> 'daren'.",
+    "personal": [0],
+    "unverified_label": "none",
+    "unclassified_label": "verified"
+  },
+
+  "verified_type_ext": {
+    "_comment": "Heuristic subtype codebook for verified_type_ext. NOTE: ext meaning differs by context (org vs personal), so this is primarily meaningful for ORG (verified_type > 0) accounts; personal accounts' ext encodes a different field/category scheme. Values shift with Weibo versions. Edit as needed; unknown codes resolve to unknown_label.",
+    "enterprise": [50],
+    "government": [51],
+    "media": [52, 53],
+    "other_org": [0],
+    "personal_field": [1, 2],
+    "daren": [-1],
+    "unknown_label": "unknown"
+  },
+
+  "verified_level": {
+    "_comment": "Personal verification tier (黄V / 橙V / 金V). Working hypothesis: 1=huang_v, 2=cheng_v, 3=jin_v, 0=none. Weibo recomputes this dynamically (~every 30 days) from read-count / follower-engagement (heat); confirm against a known account before relying on it.",
+    "tiers": {
+      "0": "none",
+      "1": "huang_v",
+      "2": "cheng_v",
+      "3": "jin_v"
+    }
+  },
+
+  "exclusions": {
+    "_comment": "Name-based lists for stripping official / state-media accounts from the top-followed ranking. Mirrors the old config/account_categories.json.",
+    "weibo_official": {
+      "prefix": ["微博"],
+      "exact": [
+        "粉丝红包",
+        "超话社区",
+        "SVIP内容精选",
+        "微博小秘书",
+        "微博公开度",
+        "微博创作者广告共享计划",
+        "微博抽奖平台"
+      ]
+    },
+    "state_media": {
+      "keywords": [
+        "央视", "新华", "人民", "澎湃", "环球", "共青团", "政府", "军号", "战区",
+        "新闻", "日报", "时报", "晚报", "早报", "封面", "新黄河", "半月谈", "广电",
+        "电视台", "融媒", "军网", "解放军", "国防部", "时政", "新闻网", "党媒",
+        "宣传部", "网信", "观察者网", "报"
+      ],
+      "exact": [
+        "玉渊谭天", "新浪热点", "新浪财经", "新浪新闻", "央视网", "人民网",
+        "中国新闻网", "新华网", "凤凰网", "凤凰周刊", "凤凰网国际", "北京青年报",
+        "北京日报", "中国军号", "中国火箭军", "东部战区", "联合国", "中国政府网",
+        "北京时间", "天涯历知幸", "新京报", "新京报我们视频", "大河报",
+        "南方周末", "南方都市报", "潇湘晨报", "都市快报", "华商报", "中国青年报",
+        "财新网", "Vista看天下", "中国历史研究院", "中国警方在线", "中国气象爱好者",
+        "中国地震台网速报", "中国军工", "中国反邪教", "中国国家地理",
+        "中国航空工业集团", "央广网", "凤凰网财经", "凤凰网科技", "财经网",
+        "日经中文网", "央广军事", "贝壳财经", "新浪军事", "新浪证券", "新浪科技",
+        "新浪娱乐", "新浪仓石基金"
+      ]
+    }
+  },
+
+  "profile_visit": {
+    "_comment": "profile-visit only visits PERSONAL accounts; organization (blue-V) accounts - enterprise / official / government / media / other org (verified_type > 0) - are skipped before any request is sent. Set skip_organization:false to visit everyone. Overridable at runtime with --include-org.",
+    "skip_organization": true
+  }
+}

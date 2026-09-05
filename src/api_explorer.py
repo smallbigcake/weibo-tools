@@ -4,12 +4,12 @@ Builds a unified catalog of Weibo's web APIs from two complementary sources
 and emits one machine-readable file (`doc/api_inventory.json`) plus one
 human-readable doc (`doc/api_inventory.md`):
 
-  1. Front-end JS bundles (live weibo.com) — `tmp/endpoints.txt`, produced by
-     `tmp/extract_endpoints.py`. These are *all* `/ajax/...` paths the SPA
+  1. Front-end JS bundles (live weibo.com) — `src/tmp/endpoints.txt`, produced by
+     `src/tmp/extract_endpoints.py`. These are *all* `/ajax/...` paths the SPA
      references. We probe them with the logged-in session to record status and
      response shape. No guessing.
-  2. Burp Suite capture (`tmp/http_history_burp_suite.xml`,
-     `tmp/site_map_burp_suite.xml`) — endpoints *as actually called*, including
+  2. Burp Suite capture (`src/tmp/http_history_burp_suite.xml`,
+     `src/tmp/site_map_burp_suite.xml`) — endpoints *as actually called*, including
      hosts outside `weibo.com/ajax` that the bundle scraper misses
      (`api.weibo.com/webim/*`, `rm.api.weibo.com`, `s.weibo.com`,
      `web.im.weibo.com`) and the *real* request parameters (from a captured
@@ -30,7 +30,7 @@ Usage (from project root):
     python src/api_explorer.py                # probe scraped endpoints + merge burp
     python src/api_explorer.py --mutate       # also probe mutating endpoints
     python src/api_explorer.py --no-probe     # rebuild docs from existing json
-    python tmp/extract_endpoints.py           # refresh the JS-bundle endpoint list
+    python src/tmp/extract_endpoints.py           # refresh the JS-bundle endpoint list
 """
 import argparse
 import base64
@@ -45,6 +45,9 @@ from urllib.parse import parse_qs
 from xml.etree import ElementTree as ET
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from logutil import setup as _setup_logging
+_setup_logging()
 
 from auth import Auth, USER_AGENT
 
@@ -435,7 +438,7 @@ def path_of(url):
 
 def load_scraped_endpoints():
     if not os.path.exists(ENDPOINTS_TXT):
-        raise SystemExit('endpoints.txt not found. Run: python tmp/extract_endpoints.py')
+        raise SystemExit('endpoints.txt not found. Run: python src/tmp/extract_endpoints.py')
     out = []
     with open(ENDPOINTS_TXT, 'r', encoding='utf-8') as f:
         for line in f:
