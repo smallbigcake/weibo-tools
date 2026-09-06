@@ -1,73 +1,240 @@
-# 微博用户信息字段映射（verified 系列及相关字段）
+# Weibo User Field Reference (the `verified*` family and related fields)
 
-> 记录微博用户对象中 `verified*` 认证字段，以及与之相关的身份/影响力字段的含义、
-> 取值范围与本项目实测情况。字段事实依据来自 `config/verified_categories.json`
-> 与本地关系快照（`data/relations/`）。
+> 中文文档 / Chinese version: [verified_fields.zh-CN.md](verified_fields.zh-CN.md)
 
-## 一、verified 系列字段映射表
+> Meaning, value ranges and locally observed values of the `verified*` verification
+> fields on Weibo user objects, plus the related identity / influence fields.
+> Facts come from `config/verified_categories.json` and the local relation
+> snapshots (`data/relations/`).
 
-| 字段 | 类型 | 含义 | 常见取值 / 范围 | 本仓库快照实测 | 备注 |
+## 1. The `verified*` field map
+
+| Field | Type | Meaning | Common values / range | Observed in this repo | Notes |
 |---|---|---|---|---|---|
-| `verified` | bool | 是否认证账号（黄V/蓝V/达人等）总开关 | true / false | 923/1256 = true | 其余 `verified_*` 仅在其为 true 时有意义 |
-| `verified_type` | int | 认证大类 | 0=个人认证(黄V)；>0=机构认证(蓝V)：1政府/2企业/3媒体/4其他；<0=达人；-1 也常作未认证默认值 | -1,0,1,2,3,4,5,7,10,200,220 | 判达人须 `verified==true 且 verified_type<0` |
-| `verified_type_ext` | int | 蓝V 细分类型码；个人认证下也出现 0/1/2 | 机构：50/51/52/53/0 等；个人：0/1/2；达人：-1 | org:50(×295),1(×63),2(×73),53(×41)… | 含义随微博版本变化，**需码表**；见 `verified_categories.json` |
-| `verified_level` | int | 认证等级 = 黄V/橙V/金V 档位 | 0=无 / 1=黄V / 2=橙V / 3=金V（工作假设） | 已认证几乎全 3，仅 1 个 1 | 微博每~30天按热度（阅读量/铁粉/互动）动态重算 |
-| `verified_state` | int | 认证状态 | 0=正常；2=失效/异常 | 0:893, 2:30, None:333 | None=未认证 |
-| `verified_reason` | str | 认证理由文本（资料页展示） | 自由文本 | "微博原创视频博主"、"Insta360 CEO" | 最有用、可直接展示 |
-| `verified_trade` | str(数字码) | 认证行业分类**编码**（非人类可读名） | "3421"/"1568"... 或空 | 869 个空；其余为数字码 | 需行业码表才能翻成名 |
-| `verified_reason_url` | str | 认证理由跳转链接 | URL 或空 | 全空 | 实战基本空 |
-| `verified_source` | str | 认证来源/发证方 | "微博官方认证" 等 或空 | 全空 | 实战基本空 |
-| `verified_source_url` | str | 认证来源链接 | URL 或空 | 全空 | 实战基本空 |
-| `verified_detail` | object | 结构化认证详情 | {custom, data:[{key,sub_key,weight,desc,verify_extend}]} | 个人账号有；机构常 null | 含 reason + 权重 + 实名标记 |
-| `verified_reason_modified` | str | 认证理由修改记录 | 文本/空 | 多空 | — |
-| `verified_contact_*` | str | 认证联系信息(name/email/mobile) | 文本/空 | 多空 | — |
+| `verified` | bool | Master switch for a verified account (yellow V / blue V / influencer, ...) | true / false | 923/1256 = true | The other `verified_*` fields only matter when this is true |
+| `verified_type` | int | Verification category (the official `getVerifiedIcon` decides the icon from this + `verified_type_ext`) | when `verified==true`: 0 = personal (yellow V); 1–7 = organization (blue V). When `verified==false`: 220 = club, 10 = influencer (female), others (-1/200) = no icon | -1, 0, 1, 2, 3, 4, 5, 7, 10, 200, 220 | In this snapshot every `verified_type=-1` has `verified=false` (ordinary unverified user, **not** an influencer); the "influencer" concept is not handled separately in this JS |
+| `verified_type_ext` | int | Together with `verified_type` decides the icon / tier | when `verified==true`: for type 0, 1 = gold V, 2 = orange V, 0/other = yellow V; for type 1–7, -1 = grey V, (3, 53) = red V, other = blue V | personal: 0/1/2; organization: 50/51/52/53/0/-1 | Yellow / orange / gold is decided by `verified_type_ext` (**not** `verified_level`); see "Verification icon mapping" below |
+| `verified_level` | int | Legacy verification-level field | 0 = none / 1 = yellow V / 2 = orange V / 3 = gold V (working assumption) | almost all verified are 3, only one is 1 | The front-end `getVerifiedIcon` does **not** use this field; yellow/orange/gold moved to `verified_type_ext`, so this field may be unreliable |
+| `verified_state` | int | Verification state | 0 = normal; 2 = invalid / abnormal | 0:893, 2:30, None:333 | None = not verified |
+| `verified_reason` | str | Verification reason text (shown on the profile page) | free text | "微博原创视频博主" ("Weibo original video blogger"), "Insta360 CEO" | Most useful one; can be displayed directly |
+| `verified_trade` | str (numeric code) | Verification industry **code** (not human readable) | "3421"/"1568"... or empty | 869 empty; the rest are numeric codes | Needs an industry code table to resolve to a name |
+| `verified_reason_url` | str | Link behind the verification reason | URL or empty | all empty | Practically always empty |
+| `verified_source` | str | Verification source / issuer | "微博官方认证" etc., or empty | all empty | Practically always empty |
+| `verified_source_url` | str | Verification source link | URL or empty | all empty | Practically always empty |
+| `verified_detail` | object | Structured verification details | `{custom, data:[{key, sub_key, weight, desc, verify_extend}]}` | present for personal accounts; often null for organizations | Holds reason + weight + real-name flag |
+| `verified_reason_modified` | str | Edit history of the verification reason | text / empty | mostly empty | — |
+| `verified_contact_*` | str | Verification contact info (name / email / mobile) | text / empty | mostly empty | — |
 
-## 二、不以 verified 开头但相关的字段
+## 2. Related fields that do not start with `verified`
 
-按用途分四类：
+Grouped into four buckets by purpose:
 
-**A. 认证/实名（与 verified 并列的身份信息）**
-- `is_auth`(0/1)、`auth_status`(1)、`auth_realname`、`auth_career`、`auth_career_name`、`show_auth`：实名/职业认证信息。
-- `verified_detail`（见上表）：结构化认证详情。
+**A. Verification / real name (identity info parallel to `verified`)**
+- `is_auth` (0/1), `auth_status` (1), `auth_realname`, `auth_career`, `auth_career_name`, `show_auth`: real-name / professional verification info.
+- `verified_detail` (see the table above): structured verification details.
 
-**B. 热度/影响力（即驱动黄→橙→金 升降的底层信号）**
-- `urank`：影响力排名（实测 0–30+）。
-- `user_ability` / `user_ability_extend`：传播力分值。
-- `credit_score`：信用分（实测多为 80）。
-- `status_total_counter` / `video_total_counter`：微博/视频的阅读、转发、评论、点赞、播放量。
+**B. Popularity / influence (the underlying signals that drive the yellow → orange → gold moves)**
+- `urank`: influence ranking (observed 0–30+).
+- `user_ability` / `user_ability_extend`: reach score.
+- `credit_score`: credit score (observed to be 80 in most cases).
+- `status_total_counter` / `video_total_counter`: reads / reposts / comments / likes / plays for posts and videos.
 
-**C. 会员体系（另一套身份，别和认证混淆）**
-- `mbrank` / `mbtype` / `svip` / `vvip` / `basic_member`：SVIP/VVIP 会员等级。
+**C. Membership (a separate identity axis — do not confuse it with verification)**
 
-**D. 账号属性旗标**
-- `is_big`(大V)、`brand_account`(品牌号)、`class`、`star`、`interaction_user`。
+Authoritative semantics (confirmed by the user in 2026-09; the Weibo front-end
+`isVip` function in `h5.sinaimg.cn/.../index-*.js` is the final authority):
 
-## 三、黄V / 橙V / 金V 说明
+The official membership test is:
 
-微博个人认证分三档：黄V（基础个人认证）→ 橙V（近30天阅读≥30万且铁粉≥100 的
-优质创作者）→ 金V（更高影响力的头部创作者）。**认证等级并非永久有效**：微博每约
-30 天动态审核一次，不达标会自动降级（金→橙→黄）。
+```js
+function isVip(n={}) { return n.mbrank && n.mbtype && n.mbtype !== 2; }
+```
 
-承载字段是 **`verified_level`**（1=黄V / 2=橙V / 3=金V / 0=无，属工作假设，
-建议拿已知档位的账号用 `profile_visit` 接口核对）。本仓库 `following` 快照里已认证
-账号的 `verified_level` 几乎全是 3（金V），可能因为关注列表本来就偏头部创作者/机构；
-若要做精细分层分析，应直接观测 B 类热度字段，或在 `verified_categories.json` 中
-按实测校正档位映射。
+- A regular member (vip) requires `mbtype` truthy (≠0), `mbrank` truthy (≠0)
+  **and `mbtype !== 2`**.
+- In this repo `mbtype` only ever takes `0 / 2 / 11 / 12`, so the formula is
+  equivalent to the more intuitive **`mbtype > 2 && mbrank > 0`** — i.e. member
+  = `mbtype > 2` (`11`/`12`), non-member = `mbtype ∈ {0, 2}`.
+- `mbtype=2` is the classic "not a member but `mbrank` still holds a historical
+  level" case: all 379 such users have `isVip=False` yet carry `mbrank 1–9`,
+  which means `mbtype` falls back when membership expires while `mbrank` is not
+  cleared (i.e. `mbrank` is very likely a leftover historical level).
+- `社交会员` (svip, social member) / `经营会员` (vvip, business member) are
+  **independent boolean fields** (`svip` / `vvip`), parallel to `mbtype`:
+  this snapshot has `svip=387`, `vvip=296`.
 
-## 四、配置化（单一事实来源）
+The three axes are **parallel** (none implies another; an account can be a
+regular member and a social member at the same time). `tier` takes the highest
+one: vvip > svip > vip > none.
 
-判断逻辑已改为读取 **`config/verified_categories.json`**（由
-`src/weibo_tool/verified_config.py` 加载）：
+**`mbtype` / `mbrank` ranges and meaning (regular-member axis, measured over
+1256 user records from `data.users` in the `following` snapshot)**
 
-- `verified_type` → 粗分类标签（personal / organization / daren），供
-  `blacklist_deep._verified_label` 使用。
-- `verified_type_ext` → 细分类型码表（government / media / enterprise / ...），
-  未知码回落 `unknown`。
-- `verified_level` → 黄/橙/金 档位命名。
-- `exclusions` → 官方/官媒排除名单（原 `account_categories.json` 内容已并入此处）。
+`mbtype` is the membership **type** code (the factual source for the member
+test); `mbrank` is the vip level ordinal (only meaningful for real vips).
 
-`blacklist_deep`、`top_followed` 与 `profile_visit` 都从这一份读取，避免多处逻辑分叉；
-`profile_visit` 还用 `is_organization()` 在发请求前跳过企业/官方/政府机构等蓝V账号
-（见 `profile_visit.skip_organization`）。JSON 缺失或
-解析失败时回退到 `verified_config.py` 中的内置默认值，工具仍可运行。修改认证类型 /
-排除名单只需编辑该 JSON，无需改代码。
+| Field | Type | Meaning | Observed values / range | Notes |
+|---|---|---|---|---|
+| `mbtype` | int | Membership type code | 0 = non-member (235); 2 = non-member (379); 11 = regular member/vip (21); 12 = regular member/vip (621) | Only these 4 values observed; both `11` and `12` are vip (per the `isVip` formula) — they differ by product subtype (e.g. annual / super), not by membership |
+| `mbrank` | int | vip level ordinal (1–10) | 0:235 / 1:246 / 2:116 / 3:40 / 4:50 / 5:35 / 6:107 / 7:370 / 8:28 / 9:24 / 10:5 | Higher = higher level; `mbtype=0` strictly maps to `mbrank=0` (235), `mbtype=2` also carries `mbrank 1–9` (379) but is excluded by `isVip` |
+
+Key facts from the joint distribution:
+
+- `mbtype=0` **strictly** corresponds to `mbrank=0` (235 cases) → the two agree for non-members.
+- `mbtype=2` users are confirmed non-members on their profile pages yet carry
+  `mbrank 1–9` (observed examples: `mbrank=6/2/7` all with `mbtype=2`) →
+  confirms that `mbrank` is a **lagging stock value**: it keeps the historical
+  maximum after membership expires, so it must **not** be used as a membership
+  test.
+- **To decide membership, use the `isVip` formula (`mbtype` truthy and
+  `mbtype !== 2` and `mbrank > 0`), never `mbtype` or `mbrank` alone.**
+- The above only describes the regular-member axis; it says nothing about the
+  two independent `svip` (social member) / `vvip` (business member) axes.
+
+**Observed `mbtype × mbrank × isVip` combinations (1256 users, applying the
+official `isVip` formula row by row):**
+
+| mbtype | Users | isVip | mbrank range | Meaning |
+|---|---|---|---|---|
+| 0 | 235 | all False | always 0 | Non-member (no leftover) |
+| 2 | 379 | all False | 1–9 | Non-member, `mbrank` holds a historical level |
+| 11 | 21 | all True | 1–9 | Regular member |
+| 12 | 621 | all True | 1–10 | Regular member |
+
+→ In one sentence: **`mbtype > 2` means member; `mbrank` is the current level
+only for real members (11/12), while for `mbtype=2` it is expired residue and
+must never be used as a membership test.**
+
+> An early relation snapshot suggested `vvip ⊂ svip` (every vvip also had svip);
+> per the authoritative definition the two are parallel axes, and whether they
+> coexist is decided by the individual boolean fields inside the `membership`
+> block.
+
+**Storage alignment (`data.user` of `profile/info`)**: `profile_visit
+--update-profile` now writes the **complete `data.user`** returned by
+`profile/info` back into the snapshot record verbatim (1:1 structure) and
+attaches a derived `membership` block:
+
+```json
+"membership": {
+  "tier": "vip|svip|vvip|none",
+  "is_member": true,
+  "is_vip": true,    // regular member
+  "is_svip": false,  // social member
+  "is_vvip": false,  // business member
+  "mbtype": 11,
+  "mbrank": 7
+}
+```
+
+As a result, fields that exist **only** in `data.user` — such as `icon_list`,
+`v_plus`, `top_user`, `user_type`, `is_star`, `is_muteuser` — also appear in the
+local snapshot after a `--update-profile` run (see group E below).
+
+**D. Account attribute flags**
+- `is_big` (big V), `brand_account` (brand account), `class`, `star`, `interaction_user`.
+
+**E. Returned only by `data.user` of `profile/info` (absent from relation-list
+endpoints by default — run `--update-profile` to backfill)**
+- `icon_list`: profile-page badge icon list (membership / influencer / credit /
+  verification, ...), each entry `{type, url, ...}`; presentation layer, derived
+  from other state.
+- `v_plus`: related to Weibo's "V+" creator program (fan subscriptions / paid
+  content / exclusive fan perks); V+ is a real Weibo product.
+- `top_user`: probably a "top user / high-influence user" flag.
+- `user_type`: coarse user-class code (e.g. 0 = ordinary user; the rest are
+  influencers / special / organizational), conceptually overlapping with but
+  independent of `verified_type`.
+- `is_star`: probably a "celebrity / recommended / signed" user flag (it may
+  also mean "starred").
+- `is_muteuser`: whether the platform has **muted / silenced** the account
+  (cannot post or comment) — a compliance dimension, orthogonal to both
+  membership and verification.
+
+> The meanings of the six fields above are inferred from public material and
+> have **not** been verified one-by-one against local data; after a
+> `--update-profile` run you can read the real values from the snapshot to
+> calibrate them.
+
+## 3. Verification icon mapping (`getVerifiedIcon` from the Weibo front-end `index-*.js`)
+
+Below is the icon decision logic actually used by the Weibo web client
+(manually verified against the source). It is the **authoritative** source for
+the semantics of these two fields:
+
+```js
+function getVerifiedIcon(n) {
+  if (n) {
+    const r = +n.verified_type, o = +n.verified_type_ext;
+    if (n.verified) {                                   // -- verified --
+      if (r === 0)                                     // personal (yellow V)
+        return o === 1 ? "vgold" : o === 2 ? "vorange" : "vyellow";
+      if (r > 0 && r < 8)                              // organization (blue V): type 1..7
+        return o === -1 ? "vgrey" : (r === 3 && o === 53) ? "vred" : "vblue";
+    } else {                                            // -- not verified --
+      if (r === 220) return "club";                    // club / super-topic host
+      if (r === 10)  return "vgirl";                   // influencer (female) and similar badges
+    }
+  }
+  return "";                                            // everything else: no icon (ordinary unverified)
+}
+```
+
+**Mapping this back to the combinations observed in this repo:**
+
+- Personal (yellow V) `verified_type=0`:
+  - `ext=1` → **gold V** (`vgold`, 62 users in this snapshot)
+  - `ext=2` → **orange V** (`vorange`, 73 users)
+  - `ext=0/other` → **yellow V** (`vyellow`, 145 users)
+  - ⇒ **yellow / orange / gold is decided by `verified_type_ext`, not by
+    `verified_level`.**
+- Organization (blue V) `verified_type ∈ {1..7}`:
+  - `ext=-1` → **grey V** (`vgrey`)
+  - `type=3 and ext=53` → **red V** (`vred`, media red V, 41 users)
+  - other → **blue V** (`vblue`, incl. ext 0/50/51/52/..., 80+195+118+59+36+32+17+9+8+7+6+2+... users)
+- Not verified (`verified=false`):
+  - `type=220` → **club** icon (37 users, previously mis-read as blue V)
+  - `type=10` → **vgirl** icon (1 user, previously mis-read as blue V)
+  - `type=-1 / 200` etc. → no icon (ordinary unverified, 294 / 1 users)
+
+> Note: the source tests organizations with `r>0 && r<8`, so `type=5` and
+> `type=7` seen in this snapshot are still valid blue V (not "non-standard"
+> codes) — they are just not broken down into sub-categories. That breakdown
+> comes from `verified_type_ext` plus the code table in
+> `verified_categories.json`.
+
+### About the yellow V / orange V / gold V tiers
+
+The three personal-verification tiers (yellow → orange → gold) are expressed by
+`verified_type_ext`; moving up or down is still recomputed dynamically by Weibo
+from the last 30 days of reads / loyal fans / interaction, and failing the
+thresholds causes a demotion. For fine-grained tier analysis, look directly at
+the group-B popularity fields, or calibrate the tier mapping in
+`verified_categories.json` from real observations (`verified_level` does **not**
+participate in the icon decision in this front-end logic — prefer
+`verified_type_ext`).
+
+## 4. Configuration (single source of truth)
+
+The decision logic now reads **`config/verified_categories.json`** (loaded by
+`src/weibo_tool/verified_config.py`):
+
+- `verified_type` → coarse label (personal / organization), used by
+  `blacklist_deep._verified_label` (`verified=false` and neither 220 nor 10 is
+  not counted; the influencer `daren` subtype does not appear in this snapshot
+  and the front-end JS does not handle it separately).
+- `verified_type_ext` → fine-grained type code table (government / media /
+  enterprise / ...) and the personal yellow/gold/orange tiers (0 = yellow,
+  1 = gold, 2 = orange); unknown codes fall back to `unknown`.
+- `verified_level` → legacy yellow/orange/gold tier naming (**no longer used by
+  the front-end icon logic**, kept for reference only).
+- `exclusions` → official / state-media exclusion list (the former
+  `account_categories.json` content was merged in here).
+
+`blacklist_deep`, `top_followed` and `profile_visit` all read from this one file
+so the logic cannot fork; `profile_visit` additionally uses `is_organization()`
+to skip enterprise / official / government blue-V accounts *before* issuing the
+request (see `profile_visit.skip_organization`). If the JSON is missing or fails
+to parse, the tool falls back to the built-in defaults in `verified_config.py`
+and keeps working. Changing verification types or the exclusion list only
+requires editing that JSON — no code change.

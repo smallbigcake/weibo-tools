@@ -752,6 +752,10 @@ def render_markdown():
                  'entries are documented-from-capture only.)'
                  % payload.get('mutate', False))
     lines.append('> Total distinct endpoints: %s.' % payload.get('endpoint_count', '?'))
+    lines.append('>')
+    lines.append('> **Generated file — do not edit by hand.** It is rewritten on every '
+                 '`src/api_explorer.py` run (and re-rendered by `src/live_test.py`), so no '
+                 '`.zh-CN` translation is maintained for it; English is the source language.')
     lines.append('')
     lines.append('## Conventions')
     lines.append('')

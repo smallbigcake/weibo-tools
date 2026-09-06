@@ -1,5 +1,7 @@
 # Cookie / Login-State Review Notes
 
+> 中文文档 / Chinese version: [cookie_review.zh-CN.md](cookie_review.zh-CN.md)
+
 Investigation of which Weibo APIs (re)issue the session cookies `WBPSESS` and
 `SUB`, by actively expiring/deleting each and probing candidate endpoints while
 diffing the session cookie jar before/after every call.

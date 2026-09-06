@@ -1,6 +1,6 @@
 # Weibo Login-related JS Resources (src/js)
 
-> 中文文档 / Chinese version: [README.zh.md](README.zh.md)
+> 中文文档 / Chinese version: [README.zh-CN.md](README.zh-CN.md)
 
 This directory holds front-end JavaScript source that was captured from Weibo's login
 chain and then **deobfuscated (beautified)**. These files are the authoritative reference

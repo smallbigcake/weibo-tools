@@ -1,6 +1,6 @@
 # 微博登录相关 JS 资源说明（src/js）
 
-> English version: [README.md](README.md)
+> English version (default): [README.md](README.md)
 
 本目录存放从微博登录链路中抓取、并**逆向还原（美化）**后的前端 JavaScript 源码。
 这些文件是分析 `weibo-tools` 登录逻辑（`src/auth.py`）的权威依据：我们对比浏览器真实

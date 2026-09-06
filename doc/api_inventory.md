@@ -7,6 +7,8 @@
 > Logged-in (probe) user: `匿名用户A` (uid=7904020000). Capture account (Burp) is a different one (uid 1176110000); uids in captured params are samples.
 > Mutating endpoints probed live: False. (`source: burp` entries are documented-from-capture only.)
 > Total distinct endpoints: 277.
+>
+> **Generated file — do not edit by hand.** It is rewritten on every `src/api_explorer.py` run (and re-rendered by `src/live_test.py`), so no `.zh-CN` translation is maintained for it; English is the source language.
 
 ## Conventions
 
