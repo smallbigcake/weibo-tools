@@ -107,7 +107,6 @@ git-ignored.
 ```
 config/                     Committed config templates + verified_categories.json
 doc/                        Documentation (see "Documentation" below)
-filtered-users/             Standalone JS helper for the filtered-users page
 src/
 ├── weibo-tool.py           Thin, dependency-free CLI entry point
 ├── auth.py                 QR login, silent renewal, cookie-jar handling
@@ -115,6 +114,7 @@ src/
 ├── blacklist_analyzer.py   Standalone blacklist analyzer (pre-CLI script)
 ├── chat.py                 Group-chat monitor (Bayeux long-polling)
 ├── api_explorer.py         Scrapes Weibo JS bundles -> doc/api_inventory.*
+├── static_fetch.py         Mirrors a CDN domain's static assets -> static/
 ├── live_test.py            Probes every catalogued endpoint -> live_status
 ├── logutil.py              Logging setup
 ├── weibo_tool/             The CLI package
@@ -122,7 +122,8 @@ src/
 │   ├── http_engine.py      Shared HTTP layer (headers, retry, throttling)
 │   ├── verified_config.py  Loader for config/verified_categories.json
 │   └── commands/           One module per subcommand
-├── js/                     Deobfuscated Weibo login JS (see src/js/README.md)
+├── browser/               Browser-side scripts (run in the DevTools console)
+├── static/                Mirrored Weibo CDN assets (see src/static/README.md)
 ├── data/                   Generated analysis artifacts (git-ignored)
 ├── log/                    Runtime logs (git-ignored)
 ├── experiment/             Ad-hoc experiment scripts
@@ -154,8 +155,8 @@ Changing it requires no code change.
 | [doc/verified_fields.md](doc/verified_fields.md) | English | Field reference for the `verified*` / membership fields |
 | [doc/verified_fields.zh-CN.md](doc/verified_fields.zh-CN.md) | 简体中文 | Chinese translation |
 | [doc/api_inventory.md](doc/api_inventory.md) | English | **Generated** catalog of 277 endpoints — see note below |
-| [src/js/README.md](src/js/README.md) | English | Map of the captured / deobfuscated login JS |
-| [src/js/README.zh-CN.md](src/js/README.zh-CN.md) | 简体中文 | Chinese translation |
+| [src/static/README.md](src/static/README.md) | English | Map of the captured / deobfuscated login JS |
+| [src/static/README.zh-CN.md](src/static/README.zh-CN.md) | 简体中文 | Chinese translation |
 
 > `doc/api_inventory.md` and `doc/api_inventory.json` are **generated** by
 > `src/api_explorer.py` (and re-rendered by `src/live_test.py`). Do not edit

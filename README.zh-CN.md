@@ -100,7 +100,6 @@ python weibo-tool.py blacklist --uid <你的_uid>
 ```
 config/                     已提交的配置模板 + verified_categories.json
 doc/                        文档（见下方“文档”）
-filtered-users/             filtered-users 页面用的独立 JS 辅助脚本
 src/
 ├── weibo-tool.py           轻量的 CLI 入口（无额外依赖）
 ├── auth.py                 扫码登录、静默续期、cookie 管理
@@ -108,6 +107,7 @@ src/
 ├── blacklist_analyzer.py   独立的黑名单分析脚本（早于 CLI 的版本）
 ├── chat.py                 群聊监听（Bayeux 长轮询）
 ├── api_explorer.py         抓取微博 JS 产物 -> doc/api_inventory.*
+├── static_fetch.py         镜像某个 CDN 域名的静态资源 -> static/
 ├── live_test.py            实测每个已编目接口 -> live_status
 ├── logutil.py              日志初始化
 ├── weibo_tool/             CLI 包
@@ -115,7 +115,8 @@ src/
 │   ├── http_engine.py      共享 HTTP 层（请求头、重试、限速）
 │   ├── verified_config.py  读取 config/verified_categories.json
 │   └── commands/           每个子命令一个模块
-├── js/                     逆向还原后的微博登录 JS（见 src/js/README.md）
+├── browser/               浏览器端脚本（在 DevTools 控制台里运行）
+├── static/                镜像的微博 CDN 静态资源（见 src/static/README.md）
 ├── data/                   生成的分析产物（git 忽略）
 ├── log/                    运行日志（git 忽略）
 ├── experiment/             临时实验脚本
@@ -146,8 +147,8 @@ src/
 | [doc/verified_fields.md](doc/verified_fields.md) | English | `verified*` 及会员体系字段参考 |
 | [doc/verified_fields.zh-CN.md](doc/verified_fields.zh-CN.md) | 简体中文 | 中文翻译 |
 | [doc/api_inventory.md](doc/api_inventory.md) | English | **自动生成**的 277 个接口清单——见下方说明 |
-| [src/js/README.md](src/js/README.md) | English | 抓取并还原后的登录 JS 导览 |
-| [src/js/README.zh-CN.md](src/js/README.zh-CN.md) | 简体中文 | 中文翻译 |
+| [src/static/README.md](src/static/README.md) | English | 抓取并还原后的登录 JS 导览 |
+| [src/static/README.zh-CN.md](src/static/README.zh-CN.md) | 简体中文 | 中文翻译 |
 
 > `doc/api_inventory.md` 与 `doc/api_inventory.json` 由 `src/api_explorer.py`
 > **生成**（并由 `src/live_test.py` 重新渲染），请勿手工编辑。由于每次运行都会
