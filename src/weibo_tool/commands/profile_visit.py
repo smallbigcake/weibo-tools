@@ -210,25 +210,61 @@ def visit_one(auth, uid):
     return 'ok', user
 
 
-# Snapshot fields that profile/info is able to refresh. The uid itself is
-# carried by the API as `id`; every field below is copied by the same name.
-_UPDATABLE_FIELDS = (
-    'screen_name', 'gender', 'location', 'verified', 'verified_type',
-    'followers_count', 'friends_count', 'statuses_count', 'description',
-    'following', 'follow_me', 'special_follow', 'avatar_hd', 'profile_url',
-)
+# profile/info returns the full `data.user` object; we copy it VERBATIM into the
+# snapshot record so the stored user JSON mirrors profile/info's `data.user`
+# structure exactly (requirement: stored data must match profile/info shape).
+# Tooling keys added by relations_sync (uid / _source / first_seen_at) are
+# preserved, never overwritten by the copy.
+_TOOL_KEYS = ('uid', '_source', 'first_seen_at')
 # Rewriting the whole snapshot is not free, so refresh it in chunks rather
 # than after every single visit.
 _UPDATE_BATCH = 100
+
+
+def _derive_membership(user):
+    """Derive the membership tier hierarchy from the raw profile/info fields.
+
+    Weibo models membership on three parallel axes (none definitively implies
+    another), plus plain users with no membership at all:
+      * vip  (普通会员) -> mbtype/mbrank > 0      (basic paid membership)
+      * svip (社交会员) -> social membership flag
+      * vvip (经营会员) -> business / operating membership flag
+    `tier` is the highest applicable label; the per-axis booleans capture any
+    coexistence (a user can be both vip and svip, etc.).
+    """
+    mbtype = user.get('mbtype') or 0
+    mbrank = user.get('mbrank') or 0
+    svip = bool(user.get('svip'))
+    vvip = bool(user.get('vvip'))
+    is_vip = (mbtype > 0) or (mbrank > 0)
+    if vvip:
+        tier = 'vvip'        # 经营会员
+    elif svip:
+        tier = 'svip'        # 社交会员
+    elif is_vip:
+        tier = 'vip'         # 普通会员
+    else:
+        tier = 'none'        # 普通用户（无会员）
+    return {
+        'tier': tier,
+        'is_member': is_vip or svip or vvip,
+        'is_vip': is_vip,          # 普通会员
+        'is_svip': svip,          # 社交会员
+        'is_vvip': vvip,          # 经营会员
+        'mbtype': mbtype,
+        'mbrank': mbrank,
+    }
 
 
 def _apply_profile_updates(owner_uid, kind, users_by_uid):
     """Refresh snapshot records from data the visit request already returned.
 
     This reuses the response of the request we send anyway to register the
-    visit, so it costs no extra API call. Fields profile/info does not provide
-    (remark, location_raw, verified_reason, account_created_at) are left as
-    they are, first_seen_at is preserved, and only last_seen_at is bumped.
+    visit, so it costs no extra API call. The ENTIRE `data.user` dict from
+    profile/info is copied into each stored record (structure parity with the
+    profile/info `data.user`), and a derived `membership` block is attached to
+    make the tier hierarchy explicit. Tooling keys (uid / _source /
+    first_seen_at) are left intact, and only last_seen_at is bumped.
     Returns the number of records updated.
     """
     if not users_by_uid:
@@ -244,9 +280,11 @@ def _apply_profile_updates(owner_uid, kind, users_by_uid):
         user = users_by_uid.get(str(r.get('uid')))
         if not user:
             continue
-        for field in _UPDATABLE_FIELDS:
-            if field in user:
-                r[field] = user[field]
+        for k, v in user.items():
+            if k in _TOOL_KEYS:
+                continue
+            r[k] = v
+        r['membership'] = _derive_membership(user)
         r['last_seen_at'] = now_iso
         changed += 1
     if changed:
