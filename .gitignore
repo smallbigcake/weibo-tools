@@ -47,3 +47,20 @@ data/
 # Local scanner config (contains real-UID denylist / project-specific PII terms;
 # do NOT commit). Copy scripts/scan_config.example.json -> .scan_config.json locally.
 .scan_config.json
+
+# Binary assets mirrored by src/static_fetch.py (emoticons, fonts, icons) are
+# NOT committed. They are pure CDN payload with no analytical value in Git and
+# can always be re-fetched from the recorded URLs in
+# src/static/h5.sinaimg.cn/_urls.txt (see `--from-manifest`).
+src/static/**/*.bmp
+src/static/**/*.eot
+src/static/**/*.gif
+src/static/**/*.ico
+src/static/**/*.jpeg
+src/static/**/*.jpg
+src/static/**/*.otf
+src/static/**/*.png
+src/static/**/*.ttf
+src/static/**/*.webp
+src/static/**/*.woff
+src/static/**/*.woff2
