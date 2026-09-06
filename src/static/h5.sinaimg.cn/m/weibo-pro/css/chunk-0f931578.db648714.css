@@ -1,0 +1,44 @@
+.AudioAction_container_3OBM- {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  border-radius: 8px;
+  border-radius: var(--w-border-radius-l);
+  padding: 30px 38px;
+  width: 316px;
+  height: 372px
+}
+
+.AudioAction_title_3wZNn {
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 28px;
+  margin-bottom: 14px
+}
+
+.AudioAction_desc_1MnJ1 {
+  line-height: 20px;
+  color: #666;
+  font-size: 14px
+}
+
+.AudioAction_desc_1MnJ1 a {
+  color: var(--w-link-blue)
+}
+
+.AudioAction_btn_1GnIz {
+  position: absolute;
+  bottom: 38px;
+  left: 50%;
+  -webkit-transform: translateX(-50%);
+  transform: translateX(-50%);
+  width: 142px
+}
+
+.AudioAction_close_19ODn {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  font-size: 12px;
+  cursor: pointer
+}

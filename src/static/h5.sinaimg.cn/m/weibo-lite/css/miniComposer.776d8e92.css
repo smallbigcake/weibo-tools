@@ -1,0 +1,86 @@
+.flex-row {
+  -webkit-box-orient: horizontal;
+  -ms-flex-direction: row;
+  flex-direction: row
+}
+
+.flex-col,
+.flex-row {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-direction: normal
+}
+
+.flex-col {
+  -webkit-box-orient: vertical;
+  -ms-flex-direction: column;
+  flex-direction: column
+}
+
+.composer-mini-bar {
+  line-height: 1.8125rem
+}
+
+.composer-mini-wrap {
+  background-color: #fff;
+  padding: .75rem
+}
+
+.composer-mini-wrap .textarea-box {
+  position: relative;
+  margin-bottom: .5rem
+}
+
+.composer-mini-wrap .textarea {
+  color: #333;
+  outline: 0;
+  border: 0;
+  font-size: 1rem;
+  line-height: 1.40625rem;
+  max-height: 4.5rem;
+  width: 100%
+}
+
+.composer-mini-wrap .textarea.shadow {
+  position: absolute;
+  top: 0;
+  z-index: -9999;
+  visibility: hidden
+}
+
+.composer-mini-wrap .textarea::-webkit-input-placeholder {
+  color: #a5adb5
+}
+
+.composer-mini-wrap .textarea::-moz-placeholder {
+  color: #a5adb5
+}
+
+.composer-mini-wrap .textarea:-ms-input-placeholder {
+  color: #a5adb5
+}
+
+.composer-mini-wrap .textarea::-ms-input-placeholder {
+  color: #a5adb5
+}
+
+.composer-mini-wrap .textarea::placeholder {
+  color: #a5adb5
+}
+
+.composer-mini-wrap .words-count {
+  -webkit-box-flex: 1;
+  -ms-flex: 1;
+  flex: 1;
+  line-height: 1.5rem;
+  font-size: .875rem
+}
+
+.composer-mini-wrap .words-count.limit {
+  color: #d94b4b
+}
+
+.focus {
+  min-height: 3.125rem
+}

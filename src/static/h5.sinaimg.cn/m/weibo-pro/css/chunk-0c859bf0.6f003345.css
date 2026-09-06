@@ -1,0 +1,55 @@
+.SingleDesc_nav_WVIti {
+  width: 100%;
+  height: var(--weibo-top-nav-height);
+  margin-bottom: 8px;
+  margin-bottom: var(--w-gap);
+  padding-top: var(--weibo-top-nav-paddingTop);
+  border-top: var(--weibo-top-nav-borderTop);
+  background-color: var(--weibo-top-nav-panel-bgColor);
+  -webkit-box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .06);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .06);
+  position: fixed;
+  z-index: 9999;
+  z-index: var(--w-index-layer);
+  left: 0;
+  top: 0
+}
+
+.SingleDesc_nav_WVIti,
+.SingleDesc_navwrap_NgVFH {
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box
+}
+
+.SingleDesc_navwrap_NgVFH {
+  max-width: 1300px;
+  padding: 0 30px;
+  height: 100%;
+  margin: 0 auto
+}
+
+.SingleDesc_logo_1uuBi {
+  width: 90px;
+  height: 38px;
+  cursor: pointer
+}
+
+.SingleDesc_logo_1uuBi svg {
+  width: 100%
+}
+
+.SingleDesc_title_hsB69 {
+  margin-left: 23px;
+  line-height: 20px;
+  font-size: 16px;
+  font-weight: 500
+}
+
+.SingleDesc_main_2K8PY {
+  width: 1000px;
+  margin: 0 auto
+}
+
+.SingleDesc_pt_111c3 {
+  padding-top: 65px
+}

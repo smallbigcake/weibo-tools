@@ -1,0 +1,108 @@
+.AudioCover_file_15oWJ {
+  width: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0;
+  cursor: pointer
+}
+
+.AudioCover_addbox_e32Pw {
+  width: 112px;
+  height: 112px;
+  margin: 0 24px 0 0;
+  background: #f0f1f4;
+  background: var(--w-input-background);
+  border: 1px dashed #ccc;
+  border: 1px dashed var(--w-disabled);
+  border-radius: 8px;
+  border-radius: var(--w-border-radius-l);
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box
+}
+
+.AudioCover_add_Z16Vl {
+  font-size: 44px;
+  color: #ccc;
+  color: var(--w-disabled)
+}
+
+.AudioCover_pic_20A5I {
+  width: 112px;
+  margin: 0 24px 0 0;
+  border-radius: 8px;
+  border-radius: var(--w-border-radius-l);
+  overflow: hidden
+}
+
+.AudioCover_btnbox_113H_ {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 40px 12px 6px;
+  background-image: -webkit-gradient(linear, left top, left bottom, from(transparent), to(rgba(0, 0, 0, .6)));
+  background-image: linear-gradient(180deg, transparent, rgba(0, 0, 0, .6))
+}
+
+.AudioCover_btn_2AC57 span {
+  color: #fff;
+  color: var(--w-contrast);
+  text-shadow: 0 0 1px rgba(0, 0, 0, .5)
+}
+
+.AudioCover_line_3R6Xo {
+  height: 12px;
+  line-height: 0
+}
+
+.AudioCover_text_3rueS {
+  margin: 10px 0 0;
+  line-height: 16px;
+  font-size: 12px;
+  color: #939393;
+  color: var(--w-sub)
+}
+
+.AudioCover_tit1_1sLo6 {
+  line-height: 20px;
+  font-size: 16px;
+  font-weight: 700
+}
+
+.AudioCover_tit1_1sLo6 span {
+  margin-left: 4px;
+  color: #e14123;
+  color: var(--w-special)
+}
+
+.AudioCover_gap1_-7qik {
+  margin-top: 26px
+}
+
+.AudioCover_gap2_1OgLb {
+  margin-top: 20px
+}
+
+.AudioAlbumAddLayer_layer_2mcFv {
+  padding: 0 20px 40px
+}
+
+.AudioAlbumAddLayer_tit_2cpOg {
+  margin: 20px 0 0;
+  line-height: 18px;
+  font-size: 14px;
+  font-weight: 500
+}
+
+.AudioAlbumAddLayer_tit_2cpOg span {
+  margin-left: 2px;
+  color: #e14123;
+  color: var(--w-special)
+}
+
+.AudioAlbumAddLayer_top8_3njA1 {
+  margin: 8px 0 0
+}

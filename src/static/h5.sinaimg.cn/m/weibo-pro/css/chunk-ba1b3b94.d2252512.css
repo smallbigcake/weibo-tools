@@ -1,0 +1,105 @@
+.ApprovalList_pic_1w5A9 {
+  width: 80px;
+  height: 80px;
+  margin: 0 20px 0 0;
+  border-radius: 4px
+}
+
+.ApprovalList_tab_mkpXg {
+  margin: 0 72px 0 0
+}
+
+.ApprovalList_tit_2f1sz {
+  font-size: 16px;
+  font-weight: 700
+}
+
+.ApprovalList_mar1_2J2PU {
+  margin: 0 -40px
+}
+
+.ApprovalList_mar1_2J2PU .ApprovalList_tit_2f1sz {
+  margin: 0 0 0 40px;
+  padding: 11px 0
+}
+
+.ApprovalList_item_38pW0 {
+  min-height: 30px;
+  padding: 40px 0;
+  color: #333;
+  color: var(--w-main)
+}
+
+.ApprovalList_item2_k5F8q {
+  padding: 20px 0
+}
+
+.ApprovalList_con_1TLAq {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 24px
+}
+
+.ApprovalList_cut2_1CsqD {
+  -webkit-line-clamp: 2
+}
+
+.ApprovalList_btn1_VzVIb {
+  margin-left: 20px;
+  border-radius: 6px;
+  font-weight: 700
+}
+
+.ApprovalList_btn2_1PJW4 {
+  margin-left: 40px;
+  border-radius: 6px;
+  border-color: red !important;
+  border-color: var(--w-error) !important;
+  color: red !important;
+  color: var(--w-error) !important;
+  font-weight: 700
+}
+
+.ApprovalList_right_2fD39 {
+  width: 440px
+}
+
+.ApprovalList_radio_1of93 {
+  width: 110px
+}
+
+.ApprovalList_wrap_2SGN2:last-child .ApprovalList_line_Ye-jI {
+  display: none
+}
+
+.ApprovalList_tabin_1ST6b {
+  padding: 7px 8px;
+  margin: 4px 0;
+  border-radius: 18px;
+  color: #333;
+  color: var(--w-main)
+}
+
+.ApprovalList_tabin_1ST6b:hover {
+  background-color: rgba(255, 130, 0, .1);
+  background-color: var(--w-hover);
+  color: #ff8200;
+  color: var(--w-brand)
+}
+
+.Approval_box_aJUKz {
+  font-size: 16px
+}
+
+.Approval_tit_w7a0V {
+  padding: 11px 0 11px 20px;
+  font-weight: 700
+}
+
+.Approval_listbox_1yMvr {
+  padding: 30px 40px
+}
+
+.Approval_listitem__ziAW {
+  width: 100%
+}

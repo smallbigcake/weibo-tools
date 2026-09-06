@@ -1,0 +1,77 @@
+.SwitchHeader_gray1_BCffW {
+  color: #333;
+  color: var(--w-main)
+}
+
+.SwitchHeader_tit1_219dJ {
+  line-height: 20px;
+  font-size: 16px;
+  font-weight: 700
+}
+
+.SwitchHeader_tit1_219dJ span {
+  margin-left: 4px;
+  color: #e14123;
+  color: var(--w-special)
+}
+
+.SwitchHeader_help_3JDhR {
+  height: 20px;
+  cursor: pointer
+}
+
+.SwitchHeader_helppop1_1BZrh {
+  width: 268px
+}
+
+.SwitchHeader_qa_3qPV3 {
+  margin-left: 4px;
+  padding: 2px;
+  font-size: 16px;
+  color: #939393;
+  color: var(--w-sub)
+}
+
+.SwitchHeader_switch_2L32r .woo-switch-input {
+  margin: 0
+}
+
+.SwitchHeader_switch_2L32r .woo-switch-checked,
+.SwitchHeader_switch_2L32r .woo-switch-shadow {
+  width: 32px;
+  height: 14px;
+  background: hsla(0, 0%, 63.5%, .3);
+  -webkit-box-shadow: none;
+  box-shadow: none
+}
+
+.SwitchHeader_switch_2L32r .woo-switch-checked:after,
+.SwitchHeader_switch_2L32r .woo-switch-shadow:after {
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  -webkit-box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .2);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .2)
+}
+
+.SwitchHeader_switch_2L32r .woo-switch-shadow:after {
+  left: -4px;
+  background: var(--w-off-border-new)
+}
+
+.SwitchHeader_switch_2L32r .woo-switch-checked:after {
+  left: 0;
+  background: #78d15d
+}
+
+.SwitchHeader_gray2_3xHbl {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #939393;
+  color: var(--w-sub)
+}
+
+.SwitchHeader_left6_2B-GV {
+  margin-left: 6px
+}

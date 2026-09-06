@@ -1,0 +1,67 @@
+.AudioAlbum_gap1_22zsg {
+  margin-top: 26px
+}
+
+.AudioAlbum_gap1_22zsg:first-child {
+  margin-top: 0;
+  padding-top: 26px
+}
+
+.AudioAlbum_top2_2NSaD {
+  margin: 14px 0 0
+}
+
+.AudioAlbum_scroll_22jHz {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 6px
+}
+
+.AudioAlbum_label2_mIk8T {
+  margin: 0 16px 0 0
+}
+
+.AudioAlbum_albumIcon_3PlVp {
+  background: url(https://h5.sinaimg.cn/upload/1005/1014/2021/10/20/svideo_icon.png);
+  background-size: 100%;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px
+}
+
+.AudioAlbum_icon1_2CLHm {
+  margin: 0 6px 0 0;
+  font-size: 16px
+}
+
+.AudioAlbum_add_2I8wC {
+  margin: 10px 0 0 30px;
+  font-size: 14px;
+  color: #333;
+  color: var(--w-main);
+  cursor: pointer
+}
+
+.AudioAlbum_add_2I8wC:hover {
+  color: #ff8200;
+  color: var(--w-brand)
+}
+
+.AudioAlbum_icon_1ctsH {
+  margin-right: 4px;
+  font-size: 12px;
+  font-weight: 700 !important
+}
+
+.AudioAlbum_bubble_217pS .woo-pop-bubble {
+  background: #fff;
+  -webkit-box-shadow: 0 1px 4px 0 rgba(0, 0, 0, .15);
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, .15);
+  color: #333
+}
+
+.AudioAlbum_bubble_217pS .woo-pop-caret {
+  fill: #fff;
+  -webkit-filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .1));
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .1))
+}

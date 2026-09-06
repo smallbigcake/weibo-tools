@@ -1,0 +1,71 @@
+.AudioPay_gap1_10cwN {
+  margin-top: 26px;
+  margin-bottom: 26px
+}
+
+.AudioPay_gap2_3u-df {
+  padding-top: 37px
+}
+
+.AudioPay_gap2_3u-df span {
+  margin-right: 4px
+}
+
+.AudioPay_gap1_10cwN:first-child {
+  margin-top: 0;
+  padding-top: 26px
+}
+
+.AudioPay_gray1_3AKTy {
+  color: #333;
+  color: var(--w-main)
+}
+
+.AudioPay_tit1_1GmRM {
+  line-height: 20px;
+  font-size: 16px;
+  font-weight: 700
+}
+
+.AudioPay_tit1_1GmRM .AudioPay_star_1AT_8 {
+  margin-left: 4px;
+  margin-right: 20px;
+  color: #e14123;
+  color: var(--w-special)
+}
+
+.AudioPay_price_dis_21e-V {
+  font-size: 14px;
+  margin-left: 4px;
+  color: #939393;
+  color: var(--w-color-gray-2);
+  cursor: not-allowed
+}
+
+.AudioPay_error_2fwBT {
+  color: #e14123;
+  color: var(--w-special);
+  white-space: nowrap
+}
+
+.AudioPay_error_2fwBT,
+.AudioPay_yuan_1Qy7P {
+  font-size: 14px;
+  margin-left: 4px
+}
+
+.AudioPay_label_1YawG {
+  margin-right: 18px
+}
+
+.AudioPay_labelb_1zttv {
+  margin-right: 14px
+}
+
+.AudioPay_timer_DaVw9 {
+  width: 42px
+}
+
+.AudioPay_colon_5dssa {
+  margin: 0 4px
+}

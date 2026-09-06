@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-cn">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="dns-prefetch" href="//h5.sinaimg.cn" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
+    <meta content="{{__keywords__}}" name="keywords" />
+    <meta content="{{__description__}}" name="description" />
+    {% if __geo__.summary_exists %}
+    <meta property="og:type" content="{{__geo__.type}}" />
+    <meta property="og:title" content="{{__geo__.title}}" />
+    <meta property="og:description" content="{{__geo__.description}}" />
+    <meta property="og:site_name" content="新浪微博" />
+    <meta property="og:locale" content="zh_CN" />
+    {% if __geo__.keywords.length %}
+    <meta property="og:keywords" content="{{__geo__.keywords|join(',')}}" />
+    {% for tag in __geo__.keywords %}
+    <meta property="article:tag" content="{{tag}}" />
+    {% endfor %} {% endif %} {% if __geo__.url %}
+    <meta property="og:url" content="{{__geo__.url}}" />
+    {% endif %} {% if __geo__.author %}
+    <meta property="og:author" content="{{__geo__.author}}" />
+    {% endif %} {% if __geo__.datePublished %}
+    <meta
+      property="article:published_time"
+      content="{{__geo__.datePublished}}"
+    />
+    {% endif %} {% if __geo__.dateModified %}
+    <meta property="article:modified_time" content="{{__geo__.dateModified}}" />
+    {% endif %} {% if __geo__.image %}
+    <meta property="og:image" content="{{__geo__.image}}" />
+    {% endif %} {% endif %} {% if __geoLdJson__ %}
+    <script type="application/ld+json">
+      {{__geoLdJson__|safe}}
+    </script>
+    {% endif %}
+
+    <link rel="icon" href="https://weibo.com/favicon.ico" />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="//h5.sinaimg.cn/m/reward-pc-kits/style.css?version={{__rewardVersion__}}"
+    />
+    <script src="https://js.t.sinajs.cn/static/validate-loader.umd.cjs"></script>
+    <title>微博</title>
+    <script>
+      if (window.location.protocol !== 'https:') {
+        window.location.href = window.location.href.replace('http:', 'https:');
+      }
+    </script>
+    <script type="module" crossorigin src="https://h5.sinaimg.cn/m/weibo-pro-next/assets/index-D53O_Npi.js"></script>
+    <link rel="stylesheet" crossorigin href="https://h5.sinaimg.cn/m/weibo-pro-next/assets/index-D06RDhv8.css">
+  </head>
+  <body>
+    <script>
+      function scriptLoaded() {
+        if (window.wbBotDetector) {
+          window.wbBotDetector.load({
+            from: 'weibo_pc',
+            isTraceMouse: true,
+            isTraceKeyboard: true,
+            getTimeout: 2000
+          });
+        }
+      }
+    </script>
+    <script
+      src="https://passport.sinaimg.cn/js/fp/1.3.2.umd.js"
+      defer="defer"
+      onload="scriptLoaded()"
+    ></script>
+    <script>
+      try {
+        var CAPTCHA_TYPE = 'yidun';
+        window.CAPTCHA_TYPE = CAPTCHA_TYPE;
+        var dynamicLoader = window.ValidateLoader.dynamicLoader;
+
+        dynamicLoader
+          .load(CAPTCHA_TYPE)
+          .catch((err) => console.error('Dun preload failed', err));
+      } catch (e) {
+        console.log(e);
+      }
+    </script>
+    <script>
+      window.$VERSION = {
+        CLIENT: 'v1.1.245',
+        SERVER: '{{__version__}}'
+      };
+      try{window.$CONFIG = {{ __config__|safe }};}catch(e){window.$CONFIG = {};}
+      const s = document.createElement('script');
+      s.src = 'https://i.sso.sina.com.cn/js/qrcode_login_v2.js';
+      document.body.appendChild(s);
+    </script>
+    <div id="app"></div>
+    <script defer src="https://static.geetest.com/v4/gt4.js"></script>
+    <script>
+      try {
+        if (window.$CONFIG.enableAria) {
+          const s = document.createElement('script');
+          s.defer = true;
+          s.src = '{{__ariaDir__}}';
+          document.body.appendChild(s);
+        }
+      } catch (e) {}
+      try {
+        const s = document.createElement('script');
+        s.defer = true;
+        s.src = '{{__poDir__}}';
+        document.body.appendChild(s);
+      } catch (e) {}
+    </script>
+    <script
+      src="//h5.sinaimg.cn/m/reward-pc-kits/sdk.js?version={{__rewardVersion__}}"
+      defer
+    ></script>
+    <!-- built files will be auto injected  -->
+  </body>
+</html>

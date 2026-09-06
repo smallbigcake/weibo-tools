@@ -1,0 +1,35 @@
+.Success_layer1_1caDB {
+  width: 1000px !important;
+  min-height: calc(100vh - 68px);
+  padding: 0 0 350px;
+  border: none !important;
+  border-radius: 4px !important;
+  border-radius: var(--w-border-radius) !important;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box
+}
+
+.Success_layer2_2iO0D {
+  width: 900px !important
+}
+
+.Success_bg1out_3JtfN {
+  padding-top: 140px
+}
+
+.Success_bg1_1P7cR {
+  width: 242px;
+  height: 198px;
+  background: url(https://h5.sinaimg.cn/upload/100/1474/2023/09/11/bg_audio21.png) no-repeat;
+  background-size: 100%
+}
+
+.Success_toastMsg_1J3tG {
+  line-height: 20px;
+  font-size: 14px;
+  margin-top: 20px
+}
+
+.Success_bind_360bg {
+  margin-right: 24px
+}
