@@ -24,9 +24,12 @@ from requests.cookies import RequestsCookieJar
 
 from weibo_tool import cli
 from weibo_tool import http_engine
+from weibo_tool.http_engine import (
+    _is_rate_limited, _backoff_wait, RETRY_ATTEMPTS)
 from weibo_tool.commands import blacklist_deep as bd
 from weibo_tool.commands import following_deep as fd
 from weibo_tool.commands import profile_visit as pv
+from weibo_tool.commands import stranger_visit as sv
 from weibo_tool.commands import top_followed as tf
 
 
@@ -191,7 +194,7 @@ class TestVisitListAbortGuard(unittest.TestCase):
         def fake_visit(_auth, uid):
             return ('ok', {'id': uid}) if uid in ok_uids else ('ratelimited', None)
 
-        args = mock.Mock(limit=0, reset=False, update_profile=False)
+        args = mock.Mock(limit=0, reset=False, new=False, update_profile=False)
         buf = io.StringIO()
         with mock.patch.object(pv, 'CACHE_ROOT', tempfile.mkdtemp()), \
              mock.patch.object(pv, 'visit_one', side_effect=fake_visit) as visit, \
@@ -245,6 +248,12 @@ class TestVisitListAbortGuard(unittest.TestCase):
         self.assertEqual(len(sleeps), 4)
         self.assertTrue(all(c[0][0] == pv._COOLDOWN_SECONDS for c in sleeps))
 
+    # Regression guard: `new=False` must be spelled out on the Mock below. A
+    # bare `mock.Mock(...)` auto-creates any missing attribute as a TRUTHY Mock,
+    # so `_visit_list` would take its `args.new` branch and delete the progress
+    # file this test had just seeded — which looks exactly like a broken
+    # "fully visited" gate. Production is unaffected (a real Namespace always
+    # has `new`); this was purely a test-double pitfall.
     def test_a_fully_visited_list_is_not_revisited(self):
         """Sanity check that the progress file actually gates the traversal."""
         tmp = tempfile.mkdtemp()
@@ -253,7 +262,7 @@ class TestVisitListAbortGuard(unittest.TestCase):
              mock.patch.object(pv, 'visit_one') as visit:
             # seed progress
             pv._save_visited(pv._progress_path('owner', 'following'), set(uids))
-            args = mock.Mock(limit=0, reset=False, update_profile=False)
+            args = mock.Mock(limit=0, reset=False, new=False, update_profile=False)
             buf = io.StringIO()
             with redirect_stdout(buf):
                 pv._visit_list(_FakeAuth(), 'owner', 'following', uids, args)
@@ -306,7 +315,7 @@ class TestProfileVisitUidsProgress(unittest.TestCase):
     def test_uids_mode_uses_its_own_progress_file(self):
         tmp = tempfile.mkdtemp()
         uids = ['a', 'b']
-        args = mock.Mock(limit=0, reset=False, update_profile=False)
+        args = mock.Mock(limit=0, reset=False, new=False, update_profile=False)
         auth = _FakeAuth()
         with mock.patch.object(pv, 'CACHE_ROOT', tmp), \
              mock.patch.object(pv, 'visit_one', return_value=('ok', {'id': 'x'})), \
@@ -428,6 +437,76 @@ class TestTopFollowedKeyTolerance(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Throttle detection: Weibo answers "too frequent" with HTTP 414, whose standard
+# meaning is "URI too long", so the status alone proves nothing — the marker has
+# to be in the BODY. Anything else must stay an unexplained failure.
+# ---------------------------------------------------------------------------
+
+class TestRateLimitDetection(unittest.TestCase):
+    MARKER = '访问过于频繁，请稍等再试！（错误码：414）'
+
+    def test_confirmed_throttle(self):
+        self.assertTrue(_is_rate_limited(_Resp(414, text='<p>%s</p>' % self.MARKER)))
+
+    def test_414_without_marker_is_not_throttle(self):
+        # A genuine "URI too long" must not be mislabelled as throttling.
+        self.assertFalse(_is_rate_limited(_Resp(414, text='<h1>414 URI Too Long</h1>')))
+
+    def test_empty_body_is_not_throttle(self):
+        self.assertFalse(_is_rate_limited(_Resp(414, text='')))
+
+    def test_other_status_never_counts_as_throttle(self):
+        for code in (200, 400, 403, 429):
+            self.assertFalse(_is_rate_limited(_Resp(code, text=self.MARKER)))
+
+
+class TestBackoffWait(unittest.TestCase):
+    def test_ceiling_grows_exponentially_then_caps(self):
+        # base=20, cap=180 -> ceilings 20, 40, 80, 160, 180, 180, ...
+        for attempt, ceiling in enumerate([20, 40, 80, 160, 180, 180], 1):
+            for _ in range(50):
+                wait = _backoff_wait(attempt, 20, 180)
+                self.assertGreaterEqual(wait, 0)
+                self.assertLessEqual(wait, ceiling)
+
+    def test_cap_is_never_exceeded(self):
+        for base, cap in ((20, 180), (3, 30), (5, 60)):
+            for attempt in range(1, RETRY_ATTEMPTS + 1):
+                self.assertLessEqual(_backoff_wait(attempt, base, cap), cap)
+
+    def test_retry_budget_is_ten(self):
+        self.assertEqual(RETRY_ATTEMPTS, 10)
+
+
+class TestPacingAimd(unittest.TestCase):
+    def test_clean_success_speeds_up_to_the_floor(self):
+        pacing = sv.PACING_INIT
+        for _ in range(200):
+            pacing = sv._next_pacing(pacing, touched_rl=False, succeeded=True)
+        self.assertAlmostEqual(pacing, sv.PACING_MIN)
+
+    def test_throttle_doubles_and_beats_a_success(self):
+        # Even when the visit eventually succeeded, a throttle must slow us
+        # down — the server did say we were too frequent.
+        self.assertAlmostEqual(
+            sv._next_pacing(0.1, touched_rl=True, succeeded=True), 0.2)
+
+    def test_throttle_respects_the_ceiling(self):
+        self.assertEqual(
+            sv._next_pacing(sv.PACING_MAX, touched_rl=True, succeeded=True),
+            sv.PACING_MAX)
+
+    def test_failure_without_throttle_keeps_pacing(self):
+        self.assertAlmostEqual(
+            sv._next_pacing(1.0, touched_rl=False, succeeded=False), 1.0)
+
+    def test_cooldown_doubles_then_caps(self):
+        self.assertEqual(sv._cooldown_pause(3), sv.COOLDOWN_BASE)
+        self.assertEqual(sv._cooldown_pause(6), sv.COOLDOWN_BASE * 2)
+        self.assertEqual(sv._cooldown_pause(30), sv.COOLDOWN_CAP)
+
+
+# ---------------------------------------------------------------------------
 # Low-severity regression guard: every module must import cleanly after the
 # import reorganisation (no leftover / duplicate / function-scope imports that
 # would break at load time, and no unused import left behind).
@@ -446,6 +525,7 @@ class TestModuleImports(unittest.TestCase):
             'weibo_tool.commands.following_deep',
             'weibo_tool.commands.profile_visit',
             'weibo_tool.commands.relations_sync',
+            'weibo_tool.commands.stranger_visit',
             'weibo_tool.commands.top_followed',
         ]
         for m in mods:
