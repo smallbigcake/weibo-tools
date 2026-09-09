@@ -94,6 +94,80 @@ def _session_expired(resp, obj):
     return False
 
 
+# Weibo signals "you are visiting too frequently" with HTTP 414, whose STANDARD
+# meaning is "URI too long" — the response is an HTML error page, not JSON, so
+# the status code alone proves nothing. We therefore never infer throttling from
+# the status: we require this exact marker in the body. Anything else stays an
+# unexplained failure and is logged exactly as before.
+_RATE_LIMIT_BODY_MARKER = '访问过于频繁，请稍等再试！（错误码：414）'
+
+
+def _is_rate_limited(resp):
+    """True when `resp` is Weibo's own "too frequent" throttle page.
+
+    Observed 2026-09-09: a throttled `profile/info` call answers HTTP 414 with
+    an HTML error page whose body reads 访问过于频繁，请稍等再试！（错误码：414）.
+    Confirming it from the body (rather than from the 414 status) keeps us from
+    mislabelling an unrelated 414 as throttling.
+    """
+    if resp.status_code != 414:
+        return False
+    try:
+        text = resp.text or ''
+    except Exception:
+        return False
+    return _RATE_LIMIT_BODY_MARKER in text
+
+
+# ---------------------------------------------------------------------------
+# retry / backoff budget
+# ---------------------------------------------------------------------------
+# One request may be tried `retries` times. The wait before each retry is an
+# exponentially growing ceiling with FULL jitter (see `_backoff_wait`):
+#
+#     ceiling = min(cap, base * 2 ** (attempt - 1))
+#     wait    = random(0, ceiling)
+#
+# `base` = ceiling (seconds) on the FIRST retry's wait.
+# `cap`  = ceiling no wait may ever exceed, however many times we retry.
+#
+# The ceiling is picked per failure class:
+#   RL  rate-limited, CONFIRMED (HTTP 414 + 访问过于频繁 body). The throttle
+#       window is long, so we are willing to wait a long time.
+#   TR  transient (network error / timeout). Usually clears within seconds.
+#   UN  unknown (any other non-200, or an unexpected `ok`). We deliberately do
+#       NOT attribute this to throttling without evidence, so it gets neither
+#       the long RL wait nor a free pass.
+RETRY_ATTEMPTS = 10
+BACKOFF_BASE_RL, BACKOFF_CAP_RL = 20, 180
+BACKOFF_BASE_TR, BACKOFF_CAP_TR = 3, 30
+BACKOFF_BASE_UN, BACKOFF_CAP_UN = 5, 60
+
+
+def _backoff_wait(attempt, base, cap):
+    """Return how long to wait before retry `attempt` (1-based), in seconds.
+
+    Exponential backoff with FULL jitter: a uniformly random value in
+    [0, min(cap, base * 2 ** (attempt - 1))]. The randomness is the point —
+    without it every client would retry at the same instant and re-trigger the
+    very throttle it is waiting out.
+    """
+    ceiling = min(cap, base * (2 ** (attempt - 1)))
+    return random.uniform(0, ceiling)
+
+
+# Monotonic count of CONFIRMED throttle responses seen in this process. Callers
+# snapshot it before a unit of work and compare afterwards: a retry may rescue
+# the request, but the pacing logic still has to slow down, because the server
+# did tell us we were too frequent.
+_RATE_LIMIT_HITS = 0
+
+
+def rate_limit_hits():
+    """Total confirmed rate-limit responses seen so far (never decreases)."""
+    return _RATE_LIMIT_HITS
+
+
 def _request_json(auth, url, retries=3, _recover_tried=False, headers=None):
     """GET a JSON endpoint with backoff.
 
@@ -126,8 +200,8 @@ def _request_json(auth, url, retries=3, _recover_tried=False, headers=None):
         'Referer': 'https://weibo.com/',
         'x-requested-with': 'XMLHttpRequest',
     }
-    delay = 5
-    for attempt in range(retries):
+    global _RATE_LIMIT_HITS
+    for attempt in range(1, retries + 1):
         try:
             resp = auth.session.get(
                 url,
@@ -144,8 +218,8 @@ def _request_json(auth, url, retries=3, _recover_tried=False, headers=None):
                 logging.warning('  backoff (http %s) on %s' % (resp.status_code, url))
                 dump_response(resp, label='redirect/forbidden (http %s)'
                               % resp.status_code)
-                time.sleep(delay)
-                delay *= 2
+                time.sleep(_backoff_wait(attempt, BACKOFF_BASE_UN,
+                                         BACKOFF_CAP_UN))
                 continue
             if resp.status_code != 200:
                 # Non-200 may carry a JSON body with Weibo's own error message
@@ -163,10 +237,19 @@ def _request_json(auth, url, retries=3, _recover_tried=False, headers=None):
                     if _try_recover_session(auth):
                         _recover_tried = True
                         continue
-                logging.warning('  http %s on %s' % (resp.status_code, url))
-                dump_response(resp, label='unexpected http %s' % resp.status_code)
-                time.sleep(delay)
-                delay *= 2
+                if _is_rate_limited(resp):
+                    # Confirmed from the body: Weibo's own throttle page. Log it
+                    # as such instead of the misleading "unexpected http 414".
+                    _RATE_LIMIT_HITS += 1
+                    logging.warning('  rate limited (http %s) on %s'
+                                    % (resp.status_code, url))
+                    time.sleep(_backoff_wait(attempt, BACKOFF_BASE_RL,
+                                             BACKOFF_CAP_RL))
+                else:
+                    logging.warning('  http %s on %s' % (resp.status_code, url))
+                    dump_response(resp, label='unexpected http %s' % resp.status_code)
+                    time.sleep(_backoff_wait(attempt, BACKOFF_BASE_UN,
+                                             BACKOFF_CAP_UN))
                 continue
             obj = resp.json()
             ban = _is_ban_response(obj)
@@ -189,14 +272,14 @@ def _request_json(auth, url, retries=3, _recover_tried=False, headers=None):
                 # reason undetermined; the caller marks the uid `unreachable`.
                 logging.warning('  unexpected ok=%s on %s' % (obj.get('ok'), url))
                 dump_response(resp, label='unexpected ok=%s' % obj.get('ok'))
-                time.sleep(delay)
-                delay *= 2
+                time.sleep(_backoff_wait(attempt, BACKOFF_BASE_UN,
+                                         BACKOFF_CAP_UN))
                 continue
             return obj
         except Exception as e:
             logging.warning('  request error %s on %s' % (e, url))
-            time.sleep(delay)
-            delay *= 2
+            time.sleep(_backoff_wait(attempt, BACKOFF_BASE_TR,
+                                     BACKOFF_CAP_TR))
     return None
 
 
