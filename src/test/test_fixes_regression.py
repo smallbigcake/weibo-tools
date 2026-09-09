@@ -64,6 +64,12 @@ class _FakeAuth(object):
     def resolve_uid(self, *a, **k):
         return True
 
+    def load(self):
+        # cli.py loads the saved cookies centrally (right after resolve_uid),
+        # so this is part of the Auth interface the double must mirror. The
+        # fake has nothing on disk to load.
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Fix 1: cli.main propagates the subcommand exit code

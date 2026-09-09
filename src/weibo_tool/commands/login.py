@@ -36,8 +36,12 @@ def run(args, auth):
 
     if args.fresh:
         clear_cookies(auth.uid or auth.label)
+        # cli.py has already loaded the saved cookies into the session, so
+        # deleting the file is not enough: purge the in-memory jar too.
+        # Otherwise test_login() below still sees the old (still valid) cookies
+        # and --fresh would silently turn into a no-op.
+        auth.session.cookies.clear()
 
-    auth.load()
     identity = auth.uid or auth.label
     if auth.test_login():
         logging.info('Already logged in as "%s" — nothing to do.' % identity)

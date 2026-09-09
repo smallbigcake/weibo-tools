@@ -741,7 +741,6 @@ def run(args, auth):
     from blacklist_analyzer import fetch_all
 
     # Subject = the account whose blacklist we analyze (must be logged in).
-    auth.load()
     if not auth.ensure_session():
         print('Could not establish a session even after auto-recovery. '
               'If a QR code appeared, scan it, then re-run this command.')

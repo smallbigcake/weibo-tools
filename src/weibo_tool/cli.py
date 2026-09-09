@@ -59,6 +59,16 @@ def main(argv=None):
         # --uid given but no saved session: the subcommand cannot proceed.
         return 1
 
+    # Load the saved cookies for the identity resolved above. This is the single
+    # authoritative place where cookies enter the session, and it must stay
+    # right next to resolve_uid() because load() derives the cookie path from
+    # uid/label. Nothing else in the stack loads them for us: ensure_session()
+    # goes straight to test_login(), which fails on an empty jar and would fall
+    # through to SSO renew / a QR prompt. load() is idempotent and a no-op when
+    # no cookie file exists, so it is safe for every subcommand (including
+    # `login`, which mints fresh ones).
+    auth.load()
+
     rc = args.run(args, auth)
     # Propagate the subcommand's exit code so a failed run (no session, no
     # snapshot, ...) is visible to the shell / scheduler. Most subcommands

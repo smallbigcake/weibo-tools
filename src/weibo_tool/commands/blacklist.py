@@ -28,7 +28,6 @@ def register(subparsers, parents=None):
 def run(args, auth):
     from blacklist_analyzer import fetch_all, analyze, print_report
 
-    auth.load()
     if not auth.test_login():
         print('Not logged in. Run `python weibo-tool.py login --user <label>` first (QR scan).')
         return
