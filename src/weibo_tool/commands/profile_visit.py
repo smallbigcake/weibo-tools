@@ -42,6 +42,13 @@ verified_type > 0) are skipped BEFORE any request is sent — only personal acco
 config/verified_categories.json (`profile_visit.skip_organization`); override per
 run with --include-org.
 
+By default the traversal goes further: ONLY svip / vvip accounts are visited
+(`--svip-only`, on by default). Weibo only surfaces the visitor list to accounts
+that are at least svip, so a visit registered against anyone below that tier is
+wasted — they can never see it. Membership (svip / vvip / mbtype / mbrank) is read
+straight from the relation snapshot, so the cut happens BEFORE any request is
+sent. Pass `--no-svip-only` to visit every personal account regardless of tier.
+
 Usage (from src/):
     python weibo-tool.py profile-visit --user cake --kind following
     python weibo-tool.py profile-visit --user cake --kind fans
@@ -52,6 +59,7 @@ import json
 import os
 import sys
 import time
+import logging
 from types import SimpleNamespace
 
 # This module lives in src/weibo_tool/commands/; resolve up to the project's
@@ -198,13 +206,23 @@ def visit_one(auth, uid):
                   no extra API cost (see --update-profile).
     """
     obj = _request_json(auth, _visit_url(uid),
-                        headers=_visit_headers(auth, uid))
+                        headers=_visit_headers(auth, uid),
+                        retries=VISIT_RETRY_ATTEMPTS)
     if obj is None:
         # No usable response: network failure, a non-200 the engine could not
         # clear, or an unexpected `ok` after all retries. Retryable, so the uid
         # stays pending and is re-attempted on the next run.
         return 'ratelimited', None
-    if _is_ban_response(obj) is not None or _is_account_issue(obj) is not None:
+    ban_reason = _is_ban_response(obj)
+    issue_reason = _is_account_issue(obj)
+    if ban_reason is not None or issue_reason is not None:
+        # Keep Weibo's OWN wording (decoded from the `msg` param for a ban, or
+        # the `message` field for a frozen account) so the reason is quotable
+        # rather than our guess at it.
+        reason = ban_reason or issue_reason or 'banned_unknown'
+        global _LAST_BAN_REASON
+        _LAST_BAN_REASON = reason
+        logging.warning('banned/account-issue uid %s: %s' % (uid, reason))
         return 'banned', None
     user = (obj.get('data') or {}).get('user') or None
     return 'ok', user
@@ -254,6 +272,51 @@ def _derive_membership(user):
         'mbtype': mbtype,
         'mbrank': mbrank,
     }
+
+
+# Membership is read straight from the relation snapshot, which keeps every
+# field the API returned verbatim, so these keys are already present on each
+# stored record (no extra API call needed to decide who to visit).
+_MEMBERSHIP_KEYS = ('svip', 'vvip', 'mbtype', 'mbrank')
+
+
+def _is_svip_or_vvip(rec):
+    """True when the record models an svip or vvip account."""
+    m = _derive_membership(rec or {})
+    return bool(m.get('is_svip') or m.get('is_vvip'))
+
+
+def _filter_svip_only(kind, uids, user_by_uid):
+    """Keep only svip/vvip accounts — the only ones who can SEE a visit.
+
+    Weibo only surfaces the visitor list to accounts that are at least svip, so
+    registering a visit against anyone below that tier is wasted: they can never
+    see it. The cut runs BEFORE any request is sent.
+
+    Safety net: if the snapshot carries none of the membership fields for ANY
+    target, the filter cannot be trusted. Rather than silently visiting nobody,
+    we visit every personal account (svip filter disabled for the run) and warn.
+    """
+    has_any = any(
+        any(k in (user_by_uid.get(u) or {}) for k in _MEMBERSHIP_KEYS)
+        for u in uids)
+    if not has_any:
+        print('  (warn) %s: svip-only found no membership fields '
+              '(svip/vvip/mbtype/mbrank) in the snapshot; cannot filter '
+              'reliably, so visiting all personal accounts (svip filter '
+              'disabled this run).' % kind)
+        return list(uids)
+    kept, skipped = [], 0
+    for u in uids:
+        rec = user_by_uid.get(u) or {}
+        if _is_svip_or_vvip(rec):
+            kept.append(u)
+        else:
+            skipped += 1
+    if skipped:
+        print('  (note) %s: svip-only skipped %d non-svip/vvip account(s).'
+              % (kind, skipped))
+    return kept
 
 
 def _apply_profile_updates(owner_uid, kind, users_by_uid):
@@ -346,6 +409,23 @@ _VERIFY_BATCH = 10
 # uid before giving up. So after this many failures in a row we simply ASK the
 # Auth object which one it is.
 _SESSION_PROBE_AFTER = 5
+
+# A profile visit is by far the most aggressively throttled call we make
+# (confirmed: HTTP 414 + 访问过于频繁 page), so it gets a far deeper retry
+# budget than the crawlers — a throttled person is worth waiting out rather
+# than dropping. The crawlers keep `_request_json`'s default instead.
+VISIT_RETRY_ATTEMPTS = 10
+
+# Weibo's own wording for the most recent ban / account-issue. Published here
+# because `visit_one` can only return a status string (its 2-tuple shape is
+# relied upon elsewhere), so callers that want to record WHY a uid was rejected
+# read this right after the call.
+_LAST_BAN_REASON = None
+
+
+def last_ban_reason():
+    """Reason text of the most recent 'banned' verdict, or None."""
+    return _LAST_BAN_REASON
 
 # Soft rate-limit handling: how many consecutive failures earn a long pause.
 _COOLDOWN_EVERY = 5
@@ -536,7 +616,6 @@ def _sync_relations(auth, kinds, args):
 
 
 def run_visit(auth, kind, args):
-    auth.load()
     if not auth.ensure_session():
         print('Could not establish a session even after auto-recovery. '
               'If a QR code appeared, scan it, then re-run this command.')
@@ -563,6 +642,7 @@ def run_visit(auth, kind, args):
     missing = []
     include_org = getattr(args, 'include_org', False)
     skip_org = should_skip_organization() and not include_org
+    svip_only = getattr(args, 'svip_only', True)
     for k in kinds:
         uids, user_by_uid, err = _load_uids(owner_uid, k)
         if uids is None:
@@ -581,9 +661,11 @@ def run_visit(auth, kind, args):
                 print('  (note) %s: skipped %d organization account(s) '
                       '(enterprise / official / government / media).'
                       % (k, org_count))
-            lists.append((k, personal))
         else:
-            lists.append((k, uids))
+            personal = uids
+        if svip_only:
+            personal = _filter_svip_only(k, personal, user_by_uid)
+        lists.append((k, personal))
     if not lists:
         print('No relation snapshots available. Run following-sync / fans-sync first:')
         for k, e in missing:
@@ -632,6 +714,11 @@ def register(subparsers, parents=None):
                    help='Also visit organization (blue-V: enterprise / official / '
                         'government / media) accounts, overriding the configured '
                         'skip_organization policy.')
+    p.add_argument('--svip-only', action=argparse.BooleanOptionalAction,
+                   default=True,
+                   help='Only visit svip/vvip accounts, because only they can see '
+                        'the visitor list (default: on). Use --no-svip-only to '
+                        'visit every personal account regardless of tier.')
     p.set_defaults(run=run_profile_visit)
 
 
