@@ -27,12 +27,12 @@
 
 ```bash
 # 在项目根目录执行
-python -m venv weibo-env
+python -m venv venvs/weibo-env
 
 # Windows（PowerShell）
-weibo-env\Scripts\Activate.ps1
+venvs/weibo-env\Scripts\Activate.ps1
 # macOS / Linux
-# source weibo-env/bin/activate
+# source venvs/weibo-env/bin/activate
 
 pip install -r requirements.txt
 ```

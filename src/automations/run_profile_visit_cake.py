@@ -28,9 +28,9 @@ work):
 
 Run from the project root (a `cd src` is enough) with the project venv:
 
-    weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py
-    weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py --sync
-    weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py --no-fof
+    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py
+    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py --sync
+    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py --no-fof
 
 Flags:
     --sync          refresh the following/fans relation snapshots first.

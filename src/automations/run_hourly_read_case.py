@@ -15,7 +15,7 @@ browser/Playwright is used.
 
 Usage (from the project root):
 
-    weibo-env\\Scripts\\python.exe src/automations/run_hourly_read_case.py
+    venvs/weibo-env\\Scripts\\python.exe src/automations/run_hourly_read_case.py
 """
 import sys
 import os

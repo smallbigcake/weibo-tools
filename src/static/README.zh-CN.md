@@ -230,14 +230,14 @@ chunk：
 
 ```bash
 # 在项目根目录，激活 venv 后执行 —— 完整运行（三条发现通道全开）
-weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn `
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn `
     --force --beautify --discover-roots --discover-sw
 
 # 只做发现、不落盘
-weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --dry-run
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --dry-run
 
 # 只重新美化磁盘上已有的文件（不联网）
-weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --beautify-only
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --beautify-only
 ```
 
 由于目录列表被禁用，工具组合了**三条**发现通道：
@@ -280,7 +280,7 @@ weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --beauti
   （`If-None-Match` / `If-Modified-Since`），未变化的资源返回 `304` 且不被重写：
 
   ```bash
-  weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn `
+  venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn `
       --from-manifest --beautify
   ```
 

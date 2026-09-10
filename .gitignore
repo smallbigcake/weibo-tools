@@ -4,7 +4,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-weibo-env/
+venvs/
 
 # Credentials & local session
 # Catches any cookie-jar dump variant: cookies, cookies.weibo, .bak, .bak2 ...

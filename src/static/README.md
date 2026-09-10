@@ -255,14 +255,14 @@ hosts more than the login app: the crawl also reaches `m/weibo-lite/`, `m/settin
 
 ```bash
 # from the project root, with the venv active — full run (all three discovery channels)
-weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn \
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn \
     --force --beautify --discover-roots --discover-sw
 
 # discover only, write nothing
-weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --dry-run
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --dry-run
 
 # re-beautify what is already on disk (no network)
-weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --beautify-only
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --beautify-only
 ```
 
 Because listing is disabled, the tool combines **three** discovery channels:
@@ -309,7 +309,7 @@ still finding it:
   are left untouched:
 
   ```bash
-  weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn \
+  venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn \
       --from-manifest --beautify
   ```
 
