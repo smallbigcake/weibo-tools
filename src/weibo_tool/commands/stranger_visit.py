@@ -513,6 +513,15 @@ def run(args, auth):
     # so the --count we announce is the number of people actually visited.
     # (Slicing first and filtering afterwards silently shrank every run.)
     progress_path = _progress_path(owner)
+    # --new mode: drop the saved progress so EVERY eligible stranger is revisited
+    # this run (same semantics as profile-visit's --new). Used by the daily
+    # automation, which must not be a no-op just because a prior run already
+    # visited everyone. Without --new we resume from saved progress.
+    if getattr(args, 'new', False) and os.path.exists(progress_path):
+        try:
+            os.remove(progress_path)
+        except OSError:
+            pass
     done = _load_visited(progress_path)
     if done:
         before = len(kept)
@@ -661,4 +670,9 @@ def register(subparsers, parents=None):
                         'They are the only ones who can SEE your visit.')
     p.add_argument('--dry-run', action='store_true',
                    help='Collect + filter + report, but perform NO visits.')
+    p.add_argument('--new', action='store_true',
+                   help='Ignore saved progress and re-visit EVERY eligible stranger '
+                        'this run (same as profile-visit\'s --new; the daily '
+                        'automation uses this so it is never a no-op just because '
+                        'everyone was visited before).')
     p.set_defaults(run=run)

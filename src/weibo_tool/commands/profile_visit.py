@@ -30,7 +30,14 @@ Traversal model:
   Each relation list (following / fans) keeps its own LONG-LIVED progress
   file, so a run resumes where the previous one stopped and keeps going until
   every uid in that list has been visited once. `--kind both` traverses
-  `following` first, then `fans`, each with independent progress.
+  `following` first, then `fans`, each with independent progress. A THIRD list,
+  **friends-of-friends ("关注的关注")**, is synthesised here by crawling the full
+  follow list of every one of the owner's friends and unioning them into
+  `data/relations/<uid>/friends_of_friends.json` (see `_ensure_fof_snapshot`).
+  The owner's own following + fans are excluded so the list is genuinely NEW
+  exposure. The first crawl is heavy (~one request per friend) but cached
+  per-friend and resumable; later runs only re-read the snapshot. `--kind all`
+  traverses following + fans + fof, each with its own progress.
 
 The uid lists come from the relation snapshots written by `relations_sync`
 (`data/relations/<uid>/{following,fans}.json`). The fans snapshot only holds
@@ -53,6 +60,8 @@ Usage (from src/):
     python weibo-tool.py profile-visit --user cake --kind following
     python weibo-tool.py profile-visit --user cake --kind fans
     python weibo-tool.py profile-visit --user cake --kind both --limit 200
+    python weibo-tool.py profile-visit --user cake --kind fof
+    python weibo-tool.py profile-visit --user cake --kind all --limit 200
 """
 import argparse
 import json
@@ -94,9 +103,41 @@ _UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
 _CLIENT_VERSION = 'v1.1.244'
 _SERVER_VERSION = 'v2026.09.02.2'
 
+# ---------------------------------------------------------------------------
+# Friends-of-friends ("关注的关注") source — a THIRD traversal list, parallel to
+# following / fans.
+#
+# Weibo exposes no "2nd-degree" endpoint, so we synthesise the list by crawling
+# the FULL follow list of every one of the owner's friends (`friendships/friends`),
+# then union the results. The per-friend crawl is cached (resumable), and the
+# union is written as a normal relation snapshot so the rest of this module can
+# treat it like any other list. The owner's own following + fans are excluded so
+# the list is genuinely NEW exposure (visiting someone already covered by the
+# following/fans lists is wasted work).
+#
+# NOTE: the first crawl is HEAVY (one paginated request per friend, ~1250 for a
+# typical account). It is fully resumable — interrupted runs skip already-cached
+# friends — and cached afterwards, so later runs are cheap.
+FOF_SNAPSHOT_NAME = 'friends_of_friends.json'
+FOF_FOLLOW_API = 'https://weibo.com/ajax/friendships/friends?uid=%s&page=%d&count=50'
+FOF_PAGE_SIZE = 50          # what FOLLOW_API returns per page (count=50)
+FOF_SAFETY_PAGES = 40       # hard stop per friend (~2000 follows; Weibo caps ~200)
+FOF_CACHE_SUBDIR = 'fof'     # per-friend caches live under .cache/profile_visit/<uid>/
+
+
+def _snapshot_filename(kind):
+    """Map a traversal kind to its relation-snapshot filename.
+
+    Most kinds use '<kind>.json'; 'fof' (friends-of-friends) uses the dedicated
+    friends_of_friends.json produced by _ensure_fof_snapshot().
+    """
+    if kind == 'fof':
+        return FOF_SNAPSHOT_NAME
+    return '%s.json' % kind
+
 
 def _snapshot_path(uid, kind):
-    return os.path.join(DATA_ROOT, str(uid), '%s.json' % kind)
+    return os.path.join(DATA_ROOT, str(uid), _snapshot_filename(kind))
 
 
 def _load_uids(uid, kind):
@@ -615,6 +656,132 @@ def _sync_relations(auth, kinds, args):
                   % (k, rc))
 
 
+# ---------------------------------------------------------------------------
+# friends-of-friends snapshot (the "关注的关注" list)
+# ---------------------------------------------------------------------------
+def _fof_cache_path(owner_uid, fuid):
+    d = os.path.join(CACHE_ROOT, str(owner_uid), FOF_CACHE_SUBDIR)
+    return os.path.join(d, '%s.json' % fuid)
+
+
+def _load_fof_cache(owner_uid, fuid):
+    path = _fof_cache_path(owner_uid, fuid)
+    if not os.path.exists(path):
+        return None
+    try:
+        return _load_json(path, None)
+    except Exception:
+        return None
+
+
+def _save_fof_cache(owner_uid, fuid, recs):
+    path = _fof_cache_path(owner_uid, fuid)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    _save_json(path, recs)
+
+
+def _fof_user_rec(u):
+    return {
+        'uid': str(u.get('id') or u.get('idstr') or ''),
+        'screen_name': u.get('screen_name') or u.get('name') or '',
+        'mbtype': u.get('mbtype') or 0,
+        'mbrank': u.get('mbrank') or 0,
+        'svip': bool(u.get('svip')),
+        'vvip': bool(u.get('vvip')),
+        'verified': bool(u.get('verified')),
+        'verified_type': u.get('verified_type'),
+    }
+
+
+def _crawl_friend_following(auth, fuid, max_pages=FOF_SAFETY_PAGES):
+    """Page one friend's full follow list.
+
+    Returns (records, pages_ok). pages_ok == 0 means the crawl never succeeded
+    (blocked / transient) and the caller must NOT cache it — a cached empty list
+    would permanently hide that friend from the fof pool.
+    """
+    out, pages_ok = {}, 0
+    for page in range(1, max_pages + 1):
+        obj = _request_json(auth, FOF_FOLLOW_API % (fuid, page))
+        _sleep()
+        if obj is None or obj.get('ok') != 1:
+            break
+        users = obj.get('users') or []
+        if not users:
+            break
+        pages_ok += 1
+        for u in users:
+            rec = _fof_user_rec(u)
+            if rec['uid']:
+                out[rec['uid']] = rec
+        if len(users) < FOF_PAGE_SIZE:
+            break  # short page == last page the server will give
+    return list(out.values()), pages_ok
+
+
+def _ensure_fof_snapshot(auth, owner_uid, args, force=False):
+    """Build (or refresh) the friends-of-friends snapshot for `owner_uid`.
+
+    Crawls the full follow list of EVERY one of the owner's friends, caches each
+    friend's list under .cache/profile_visit/<uid>/fof/ (resumable), then unions
+    them into data/relations/<uid>/friends_of_friends.json. The owner's own
+    following + fans are excluded so the result is genuinely NEW targets — visiting
+    someone already covered by the following/fans lists is wasted work.
+
+    The snapshot reuses the SAME shape as relations_sync (a `users` list), so
+    `_load_uids()` reads it untouched. Skipped when the snapshot already exists and
+    `force` is False. Pass force=True (from --sync / --refresh-fof) to rebuild.
+    """
+    snap_path = os.path.join(DATA_ROOT, str(owner_uid), FOF_SNAPSHOT_NAME)
+    if (not force) and os.path.exists(snap_path):
+        print('[profile-visit] fof snapshot already present: %s' % snap_path)
+        return
+
+    friends, _, err = _load_uids(owner_uid, 'following')
+    if friends is None:
+        print('[profile-visit] cannot build fof snapshot: %s' % err)
+        return
+    exclude = set(friends)
+    fans, _, _ = _load_uids(owner_uid, 'fans')
+    if fans:
+        exclude |= set(fans)
+
+    print('[profile-visit] building fof snapshot from %d friends '
+          '(excluding %d own-graph uids)...' % (len(friends), len(exclude)))
+    collected = {}
+    crawled = cached = 0
+    total = len(friends)
+    for i, fuid in enumerate(friends, 1):
+        recs = None if force else _load_fof_cache(owner_uid, fuid)
+        if recs is None:
+            recs, pages_ok = _crawl_friend_following(auth, fuid)
+            if pages_ok == 0:
+                continue  # failed crawl -> skip, don't cache an empty list
+            _save_fof_cache(owner_uid, fuid, recs)
+            crawled += 1
+        else:
+            cached += 1
+        for r in recs:
+            uid = r.get('uid')
+            if uid and uid not in exclude and uid not in collected:
+                collected[uid] = r
+        if i % 50 == 0 or i == total:
+            print('  fof: %d/%d friends (crawled %d, cached %d) -> %d unique targets'
+                  % (i, total, crawled, cached, len(collected)))
+
+    snapshot = {
+        'users': list(collected.values()),
+        'fetched_at': _now_iso(),
+        'source': 'friends-of-friends',
+        'friend_count': total,
+        'excluded_own_graph': len(exclude),
+    }
+    os.makedirs(os.path.dirname(snap_path), exist_ok=True)
+    _save_json(snap_path, snapshot)
+    print('[profile-visit] fof snapshot written: %d targets -> %s'
+          % (len(snapshot['users']), snap_path))
+
+
 def run_visit(auth, kind, args):
     if not auth.ensure_session():
         print('Could not establish a session even after auto-recovery. '
@@ -632,11 +799,23 @@ def run_visit(auth, kind, args):
         return _visit_list(auth, owner_uid, 'uids', explicit_uids, args,
                            force=True)
 
-    kinds = ['following', 'fans'] if kind == 'both' else [kind]
+    if kind == 'all':
+        kinds = ['following', 'fans', 'fof']
+    elif kind == 'both':
+        kinds = ['following', 'fans']
+    else:
+        kinds = [kind]
 
     # --sync: refresh the relation snapshots before traversing them.
     if getattr(args, 'sync', False):
-        _sync_relations(auth, kinds, args)
+        _sync_relations(auth, [k for k in kinds if k != 'fof'], args)
+
+    # friends-of-friends must be crawled (heavy, resumable) before its list can be
+    # traversed. Build lazily when missing; --sync / --refresh-fof force a rebuild.
+    if 'fof' in kinds:
+        _ensure_fof_snapshot(
+            auth, owner_uid, args,
+            force=getattr(args, 'sync', False) or getattr(args, 'refresh_fof', False))
 
     lists = []
     missing = []
@@ -686,9 +865,12 @@ def register(subparsers, parents=None):
         'profile-visit', parents=parents or [],
         help='Register profile visits via the web API (visits appear under '
              '我的访问记录 / 我经常访问的人).')
-    p.add_argument('--kind', choices=['following', 'fans', 'both'], default='both',
-                   help='Which relation list to visit (default: both). Each list '
-                        'is traversed fully and keeps its own progress.')
+    p.add_argument('--kind', choices=['following', 'fans', 'fof', 'both', 'all'],
+                   default='both',
+                   help='Which relation list to visit (default: both). "fof" = '
+                        'friends-of-friends (关注的关注). "all" = following + fans '
+                        '+ fof. Each list is traversed fully and keeps its own '
+                        'progress.')
     p.add_argument('--limit', type=int, default=0,
                    help='Max profiles to visit per list this run (0 = all '
                         'remaining; progress is saved so you can resume later).')
@@ -702,7 +884,12 @@ def register(subparsers, parents=None):
     p.add_argument('--sync', action='store_true',
                    help='Re-run following-sync / fans-sync first, so the '
                         'traversal works from the latest lists. A failed '
-                        'refresh never overwrites the existing snapshot.')
+                        'refresh never overwrites the existing snapshot. Also '
+                        'rebuilds the friends-of-friends snapshot when fof/all '
+                        'is selected.')
+    p.add_argument('--refresh-fof', action='store_true',
+                   help='Drop the cached per-friend follow lists and re-crawl the '
+                        'friends-of-friends snapshot from scratch (heavy).')
     p.add_argument('--sync-max-pages', type=int, default=100000,
                    help='Page cap for the --sync crawl (default 100000).')
     p.add_argument('--sync-resume', action='store_true',
