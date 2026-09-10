@@ -105,7 +105,8 @@ def register(subparsers, parents=None):
     p.add_argument('--retries', type=int, default=4,
                    help='How many times to retry each --retry-uid (default 4).')
     p.add_argument('--viewer-uid', default=None,
-                   help='Viewer account uid used to read profiles (se, by default).')
+                   help='Viewer account uid used to read profiles '
+                        '(defaults to the subject account).')
     p.add_argument('--viewer-user', default=None,
                    help='Viewer account label (alternative to --viewer-uid).')
     p.add_argument('--json', default=None,
@@ -124,11 +125,11 @@ def run(args, auth):
         viewer = Auth()
         if not viewer.resolve_uid(args.viewer_uid, args_user=args.viewer_user,
                                   prompt=not args.no_prompt):
-            return
+            return 1
         viewer.load()
         if not viewer.test_login():
             print('Viewer account not logged in.')
-            return
+            return 1
         dump = retry_uids(viewer, args.retry_uid, retries=args.retries)
         out_path = args.json or os.path.join(DATA_DIR, 'diag_retry.json')
         with open(out_path, 'w', encoding='utf-8') as f:

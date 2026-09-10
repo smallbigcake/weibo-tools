@@ -60,7 +60,7 @@ FOLLOWING_DATA_DIR = os.path.join(_SRC_DIR, 'data', 'following_deep')
 #   2. Party-media / government / news accounts (党媒/政务/新闻).
 #
 # Identified by screen_name heuristics. The lists now live in the SAME single
-# source of truth as the verified-type mapping: config/verified_categories.json
+# source of truth as the verified-type mapping: src/config/verified_categories.json
 # (loaded via weibo_tool.verified_config). Editing those lists no longer
 # requires touching code; built-in defaults in verified_config keep things
 # working if the file is missing.
@@ -242,7 +242,9 @@ def run(args, auth):
 
     full = _aggregate(follow_dir=follow_dir)
     if not full:
-        return
+        # Nothing to rank: the follow cache is missing or empty, which is a
+        # failed run (not an empty-but-successful one), so exit non-zero.
+        return 1
 
     exclude_weibo = args.exclude_weibo_official or args.exclude_official_media
     exclude_media = args.exclude_state_media or args.exclude_official_media

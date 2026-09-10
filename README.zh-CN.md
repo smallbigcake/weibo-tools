@@ -46,10 +46,13 @@ pip install -r requirements.txt
 cd src
 
 # 1）首次登录（会打印/保存二维码，用微博 App 扫码）
-python weibo-tool.py login --uid <你的_uid>
+#    首次登录必须用 --user <标签>：--uid 只在已存在保存的会话
+#    （src/cookies.<uid>.weibo）时可用。
+python weibo-tool.py login --user <标签>
 
 # 2）校验会话并输出黑名单统计
-python weibo-tool.py blacklist --uid <你的_uid>
+#    首次登录之后，就可以改用 --uid <uid> 了。
+python weibo-tool.py blacklist --user <标签>
 ```
 
 `python -m weibo_tool ...` 与 `python weibo-tool.py ...` 等价。
@@ -70,6 +73,7 @@ python weibo-tool.py blacklist --uid <你的_uid>
 | `fans-sync` | 把**关注该用户**的全部账号做同样快照处理。 |
 | `top-followed` | 对某个受众内粉丝最多的账号排序（`--source blacklist` 为默认，也可用 `--source following`），可按官方/媒体类型排除。 |
 | `profile-visit` | 通过 web 接口登记主页访问。可断点续跑，每个关系列表各自保存进度。 |
+| `stranger-visit` | 访问**陌生人**（关系链之外的账号，如"关注的关注"）以扩大曝光。随机抽样、自动调速、可断点续跑。 |
 
 执行 `python weibo-tool.py <命令> --help` 可查看该命令的完整参数。
 
@@ -90,15 +94,19 @@ python weibo-tool.py blacklist --uid <你的_uid>
 | `src/data/blacklist_deep/` | 黑名单深度抓取的 JSON/CSV 与可读的 `*_summary.md` |
 | `src/data/following_deep/` | 关注深度抓取的 JSON/CSV 与统计摘要 |
 | `src/data/relations/` | `*-sync` 生成的关注 / 粉丝快照 |
-| `src/log/` | 运行日志 |
+| `src/data/exploration/` | 阅读量实验采集到的观测数据 |
+| `src/.cache/fof/` | 共用的"关注的关注"爬取缓存（每个好友一个文件） |
+| `src/.cache/` | 其他可续跑的爬取缓存（`profile_visit/`、`relations_sync/` 等） |
+| `src/log/` | 运行日志（`weibo.log`）与自动化观测日志 |
 | `doc/api_inventory.{json,md}` | 生成的接口清单 |
 
-`src/data/`、`src/log/`、`tmp/` 以及 cookie 文件均已被 git 忽略。
+`src/data/`、`src/log/`（其 `README.md` 除外）、`src/.cache/`、`src/tmp/` 以及
+cookie 文件均已被 git 忽略。
 
 ## 目录结构
 
 ```
-config/                     已提交的配置模板 + verified_categories.json
+config/                     已提交的配置模板（chat.ini.example 等）
 doc/                        文档（见下方“文档”）
 src/
 ├── weibo-tool.py           轻量的 CLI 入口（无额外依赖）
@@ -113,15 +121,24 @@ src/
 ├── weibo_tool/             CLI 包
 │   ├── cli.py              参数解析与身份选择
 │   ├── http_engine.py      共享 HTTP 层（请求头、重试、限速）
-│   ├── verified_config.py  读取 config/verified_categories.json
+│   ├── fof.py              好友的好友（关注的关注）爬取，profile-visit 与
+│   │                       stranger-visit 共用 -> .cache/fof/
+│   ├── verified_config.py  读取 src/config/verified_categories.json
 │   └── commands/           每个子命令一个模块
+├── automations/            定时运行脚本（如每日主页访问）
 ├── browser/               浏览器端脚本（在 DevTools 控制台里运行）
+├── cert/                   web.im.weibo.com 所需的内置 CA 链
+├── config/                 运行时配置：logging.ini + verified_categories.json
 ├── static/                镜像的微博 CDN 静态资源（见 src/static/README.md）
 ├── data/                   生成的分析产物（git 忽略）
-├── log/                    运行日志（git 忽略）
+├── log/                    运行日志（git 忽略，README.md 除外）
 ├── experiment/             临时实验脚本
-└── tmp/                    临时脚本与抓包 HAR（git 忽略）
+├── test/                   登录/续期运行脚本与回归测试
+└── tmp/                    运行时临时目录（扫码登录二维码图片；git 忽略）
 ```
+
+注意：根目录 `config/` 放的是已提交的**模板**；代码运行时真正读取的配置在
+`src/config/`。
 
 ## 配置
 
@@ -132,9 +149,11 @@ src/
 | `config/chat.ini.example` | `config/chat.ini` | `chat.py` 用的 UID、群 GID 与可选代理 |
 | `config/experiment.local.json.example` | `config/experiment.local.json` | 实验脚本用的 `author_uid` / `viewer_uid` |
 
-`config/verified_categories.json` **是**提交的：它是认证类型标签、档位映射以及
-官方/官媒排除名单的唯一事实来源，供 `blacklist-deep`、`top-followed` 与
-`profile-visit` 共同使用。修改它无需改动代码。
+`src/config/verified_categories.json` **是**提交的：它是认证类型标签、档位映射、
+官方/官媒排除名单以及 `profile_visit.skip_organization` 策略的唯一事实来源，供
+`blacklist-deep`、`top-followed`、`profile-visit` 与 `stranger-visit` 共同使用。
+Python 里不再硬编码任何账号分类规则，改这个 JSON 无需改动代码。同目录下的
+`logging.ini` 由 `logutil` 读取。
 
 ## 文档
 

@@ -91,13 +91,17 @@ _setup_logging()
 
 from weibo_tool.http_engine import _request_json, _sleep, rate_limit_hits
 from weibo_tool.verified_config import is_organization, should_skip_organization
+# Friends-of-friends crawl: shared with profile-visit (one implementation, one
+# cache dir at src/.cache/fof/<owner_uid>/).
+from weibo_tool import fof
 # Reuse the single request that registers a profile visit, plus the membership
 # helpers and the relation-snapshot loader (so we can exclude real friends).
 from weibo_tool.commands.profile_visit import (
     visit_one, _load_uids, _is_svip_or_vvip, last_ban_reason,
 )
-# Endpoint templates for paging an arbitrary user's follow list / posts.
-from weibo_tool.commands.blacklist_deep import FOLLOW_API, POST_API
+# Endpoint template for paging an arbitrary user's posts (the friends-of-friends
+# follow-list crawl now comes from weibo_tool.fof).
+from weibo_tool.commands.blacklist_deep import POST_API
 
 CACHE_ROOT = os.path.join(_SRC_DIR, '.cache', 'stranger_visit')
 
@@ -133,37 +137,13 @@ def _save_visited(path, visited):
 
 
 # ---------------------------------------------------------------------------
-# per-friend follow-list cache (friends-of-friends source)
+# friends-of-friends source
 # ---------------------------------------------------------------------------
+# The per-friend crawl + cache live in `weibo_tool.fof`, shared with
+# profile-visit: ONE implementation, ONE cache dir (src/.cache/fof/<owner_uid>/).
 # Crawling every friend's full follow list costs a few thousand requests, so the
 # result is cached per friend and reused by later runs. An interrupted run can
 # simply be restarted: friends already cached are skipped.
-FOF_PAGE_SIZE = 20        # what the server actually returns per page
-FOF_SAFETY_PAGES = 50     # hard stop if the server never yields an empty page
-
-
-def _fof_cache_path(owner, fuid):
-    return os.path.join(CACHE_ROOT, str(owner), 'fof', '%s.json' % fuid)
-
-
-def _load_fof_cache(owner, fuid):
-    """Cached follow list for one friend, or None when there is no cache yet."""
-    path = _fof_cache_path(owner, fuid)
-    if not os.path.exists(path):
-        return None
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            recs = json.load(f)
-    except (OSError, ValueError):
-        return None
-    return recs if isinstance(recs, list) else None
-
-
-def _save_fof_cache(owner, fuid, recs):
-    path = _fof_cache_path(owner, fuid)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(recs, f, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------------------
@@ -199,19 +179,11 @@ def _save_banned(owner, mapping):
 # ---------------------------------------------------------------------------
 # candidate record shaping
 # ---------------------------------------------------------------------------
+# `fof.user_rec` is the shared normaliser (same shape for every source, and the
+# same one profile-visit's fof snapshot uses).
 def _user_rec(u):
     """Normalise a raw Weibo user dict into the fields we keep + filter on."""
-    uid = str(u.get('id') or u.get('idstr') or '')
-    return {
-        'uid': uid,
-        'screen_name': u.get('screen_name') or u.get('name') or '',
-        'mbtype': u.get('mbtype') or 0,
-        'mbrank': u.get('mbrank') or 0,
-        'svip': bool(u.get('svip')),
-        'vvip': bool(u.get('vvip')),
-        'verified': bool(u.get('verified')),
-        'verified_type': u.get('verified_type'),
-    }
+    return fof.user_rec(u)
 
 
 def _has_membership(rec):
@@ -221,60 +193,8 @@ def _has_membership(rec):
 # ---------------------------------------------------------------------------
 # source 1: friends-of-friends (people your friends follow)
 # ---------------------------------------------------------------------------
-def _crawl_friend_followings(auth, fuid, max_pages=FOF_SAFETY_PAGES):
-    """Page one friend's follow list until the server stops yielding users.
-
-    Returns (records, pages_ok). `pages_ok == 0` means the crawl never
-    succeeded (blocked / transient) and the caller must NOT cache it — a
-    cached empty list would permanently hide that friend.
-    """
-    out, pages_ok = {}, 0
-    for page in range(1, max_pages + 1):
-        obj = _request_json(auth, FOLLOW_API % (fuid, page))
-        _sleep()
-        if obj is None or obj.get('ok') != 1:
-            break
-        pages_ok += 1
-        users = obj.get('users') or []
-        if not users:
-            break
-        for u in users:
-            rec = _user_rec(u)
-            if rec['uid']:
-                out[rec['uid']] = rec
-        if len(users) < FOF_PAGE_SIZE:
-            break  # short page == last page the server will give us
-    return list(out.values()), pages_ok
-
-
-def _collect_fof(auth, friends, exclude, owner, refresh=False, verbose=True):
-    """Full follow list of EVERY friend in `friends`, cached per friend.
-
-    `friends` is decided by the caller (all of them unless --max-friends capped
-    it) and kept in a deterministic order, so an interrupted run resumes where
-    it stopped instead of re-crawling a different random subset.
-    """
-    out = {}
-    crawled = cached_hits = 0
-    total = len(friends)
-    for i, fuid in enumerate(friends, 1):
-        recs = None if refresh else _load_fof_cache(owner, fuid)
-        if recs is None:
-            recs, pages_ok = _crawl_friend_followings(auth, fuid)
-            if pages_ok == 0:
-                print('  [warn] friend %s: crawl failed, not cached' % fuid)
-                continue
-            _save_fof_cache(owner, fuid, recs)
-            crawled += 1
-        else:
-            cached_hits += 1
-        for rec in recs:
-            if rec.get('uid') and rec['uid'] not in exclude['all']:
-                out[rec['uid']] = rec
-        if verbose and (i % 25 == 0 or i == total):
-            print('  fof: %d/%d friends (crawled %d, cached %d) -> %d strangers'
-                  % (i, total, crawled, cached_hits, len(out)))
-    return out
+# The crawl + per-friend cache are shared with profile-visit (weibo_tool.fof);
+# we only pass the exclusion set and get back the pooled {uid: rec}.
 
 
 # ---------------------------------------------------------------------------
@@ -379,8 +299,8 @@ def _collect(auth, args, exclude, rand, owner):
         print('[stranger-visit] collecting friends-of-friends '
               '(friends=%d, full crawl, cache=%s)...'
               % (len(friends), 'off' if args.refresh_cache else 'on'))
-        c = _collect_fof(auth, friends, exclude, owner,
-                         refresh=args.refresh_cache)
+        c = fof.collect_fof(auth, friends, owner, exclude=exclude['all'],
+                            refresh=args.refresh_cache, verbose=True)
         print('  friends-of-friends pool: %d' % len(c))
         candidates.update(c)
     if 'friend-comments' in sources:

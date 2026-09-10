@@ -30,7 +30,7 @@ def run(args, auth):
 
     if not auth.test_login():
         print('Not logged in. Run `python weibo-tool.py login --user <label>` first (QR scan).')
-        return
+        return 1
 
     total, users = fetch_all(auth)
     summary = analyze(total, users)

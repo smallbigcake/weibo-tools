@@ -23,6 +23,7 @@ config/experiment.local.json
 # Logs
 src/log/*.log
 src/log/weibo.log.*
+src/log/*.jsonl
 *.log
 run_auth.*
 

@@ -4,7 +4,7 @@
 
 > Meaning, value ranges and locally observed values of the `verified*` verification
 > fields on Weibo user objects, plus the related identity / influence fields.
-> Facts come from `config/verified_categories.json` and the local relation
+> Facts come from `src/config/verified_categories.json` and the local relation
 > snapshots (`data/relations/`).
 
 ## 1. The `verified*` field map
@@ -216,7 +216,7 @@ participate in the icon decision in this front-end logic — prefer
 
 ## 4. Configuration (single source of truth)
 
-The decision logic now reads **`config/verified_categories.json`** (loaded by
+The decision logic now reads **`src/config/verified_categories.json`** (loaded by
 `src/weibo_tool/verified_config.py`):
 
 - `verified_type` → coarse label (personal / organization), used by

@@ -54,4 +54,9 @@ def run(args, auth):
     logging.info('Starting full QR login for "%s". A window will open — scan the '
                  'QR code with the Weibo app, then confirm.' % identity)
     auth.login(max_rounds=args.rounds)
+    if not auth.test_login():
+        logging.error('Login did NOT complete for "%s" (no live session after '
+                      '%d QR round(s)).' % (identity, args.rounds))
+        return 1
     logging.info('Login complete for "%s".' % identity)
+    return 0

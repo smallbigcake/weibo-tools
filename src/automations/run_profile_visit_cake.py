@@ -18,11 +18,13 @@ work):
      `.cache/profile_visit/<uid>/progress_*.json`.
 
   2. stranger-visit (friends-of-friends = "关注的关注")  -> visits people your
-     friends follow. The per-friend follow lists are crawled ONCE and cached
-     under `.cache/stranger_visit/<uid>/fof/` (1256+ files already present
-     from prior manual runs). The daily run only SAMPLES a few new strangers
-     from that cached pool, so it is cheap; it does NOT re-crawl. Progress is
-     saved in `.cache/stranger_visit/<uid>/progress_strangers.json`.
+     friends follow. The per-friend follow lists are crawled ONCE and cached in
+     the SHARED fof cache `src/.cache/fof/<uid>/` (used by both profile-visit
+     and stranger-visit; older caches under
+     `.cache/stranger_visit/<uid>/fof/` are still read). The daily run only
+     SAMPLES a few new strangers from that cached pool, so it is cheap; it does
+     NOT re-crawl. Progress is saved in
+     `.cache/stranger_visit/<uid>/progress_strangers.json`.
 
 Run from the project root (a `cd src` is enough) with the project venv:
 
@@ -58,6 +60,7 @@ sys.path.insert(0, SRC)
 os.chdir(SRC)
 
 from auth import Auth
+from weibo_tool import fof
 from weibo_tool.commands.profile_visit import run_visit
 from weibo_tool.commands.stranger_visit import run as run_stranger_visit
 
@@ -95,7 +98,11 @@ def _coverage(uid):
         cov[kind] = {'visited': visited, 'total': total}
 
     # fof leg: how many strangers visited vs the cached friend-follow pool size.
-    fof_cache_dir = os.path.join(STRANGER_CACHE, str(uid), 'fof')
+    # The pool now lives in the shared fof cache (src/.cache/fof/<uid>/), with
+    # the pre-unification directory as a fallback for an older crawl.
+    fof_cache_dir = fof.cache_dir(uid)
+    if not os.path.isdir(fof_cache_dir):
+        fof_cache_dir = os.path.join(STRANGER_CACHE, str(uid), 'fof')
     pool = 0
     if os.path.isdir(fof_cache_dir):
         pool = len([n for n in os.listdir(fof_cache_dir) if n.endswith('.json')])

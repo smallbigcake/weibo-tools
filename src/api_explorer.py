@@ -55,9 +55,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DOC_DIR = os.path.join(HERE, '..', 'doc')
 INVENTORY_JSON = os.path.join(DOC_DIR, 'api_inventory.json')
 INVENTORY_MD = os.path.join(DOC_DIR, 'api_inventory.md')
-ENDPOINTS_TXT = os.path.join(HERE, '..', 'tmp', 'endpoints.txt')
-BURP_FILES = [os.path.join(HERE, '..', 'tmp', 'http_history_burp_suite.xml'),
-              os.path.join(HERE, '..', 'tmp', 'site_map_burp_suite.xml')]
+ENDPOINTS_TXT = os.path.join(HERE, 'tmp', 'endpoints.txt')
+BURP_FILES = [os.path.join(HERE, 'tmp', 'http_history_burp_suite.xml'),
+              os.path.join(HERE, 'tmp', 'site_map_burp_suite.xml')]
 
 # Path fragments that strongly imply a mutation (so we treat them as unsafe).
 _MUTATING_HINTS = (

@@ -3,7 +3,7 @@
 > English version (default): [verified_fields.md](verified_fields.md)
 
 > 记录微博用户对象中 `verified*` 认证字段，以及与之相关的身份/影响力字段的含义、
-> 取值范围与本项目实测情况。字段事实依据来自 `config/verified_categories.json`
+> 取值范围与本项目实测情况。字段事实依据来自 `src/config/verified_categories.json`
 > 与本地关系快照（`data/relations/`）。
 
 ## 一、verified 系列字段映射表
@@ -157,7 +157,7 @@ function getVerifiedIcon(n) {
 
 ## 四、配置化（单一事实来源）
 
-判断逻辑已改为读取 **`config/verified_categories.json`**（由
+判断逻辑已改为读取 **`src/config/verified_categories.json`**（由
 `src/weibo_tool/verified_config.py` 加载）：
 
 - `verified_type` → 粗分类标签（personal / organization），供

@@ -198,7 +198,6 @@ class TestVisitListAbortGuard(unittest.TestCase):
         buf = io.StringIO()
         with mock.patch.object(pv, 'CACHE_ROOT', tempfile.mkdtemp()), \
              mock.patch.object(pv, 'visit_one', side_effect=fake_visit) as visit, \
-             mock.patch.object(pv, '_sleep', lambda *a, **k: None), \
              mock.patch.object(pv.time, 'sleep'), \
              mock.patch.object(pv, '_verify_registered', return_value=ok_uids), \
              redirect_stdout(buf):
@@ -319,7 +318,6 @@ class TestProfileVisitUidsProgress(unittest.TestCase):
         auth = _FakeAuth()
         with mock.patch.object(pv, 'CACHE_ROOT', tmp), \
              mock.patch.object(pv, 'visit_one', return_value=('ok', {'id': 'x'})), \
-             mock.patch.object(pv, '_sleep', lambda *a, **k: None), \
              mock.patch.object(pv.time, 'sleep'), \
              mock.patch.object(pv, '_verify_registered', return_value=set()), \
              redirect_stdout(io.StringIO()):

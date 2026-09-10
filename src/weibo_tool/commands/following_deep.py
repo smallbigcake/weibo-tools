@@ -147,7 +147,7 @@ def run(args, auth):
     if not auth.ensure_session():
         print('Could not establish a session even after auto-recovery. '
               'If a QR code appeared, scan it, then re-run this command.')
-        return
+        return 1
 
     # The viewer is the subject itself: it can read its own following list and
     # the public profiles of the accounts it follows. No separate viewer needed.

@@ -46,7 +46,7 @@ the portion Weibo's API exposes, so that is the portion that gets visited.
 Organization accounts (blue V: enterprise / official / government / media, i.e.
 verified_type > 0) are skipped BEFORE any request is sent — only personal accounts
 (黄V / 达人 / 普通用户) get visited. The policy lives in
-config/verified_categories.json (`profile_visit.skip_organization`); override per
+src/config/verified_categories.json (`profile_visit.skip_organization`); override per
 run with --include-org.
 
 By default the traversal goes further: ONLY svip / vvip accounts are visited
@@ -81,10 +81,11 @@ from logutil import setup as _setup_logging
 _setup_logging()
 
 from weibo_tool.http_engine import (
-    _sleep, _is_ban_response, _is_account_issue, _request_json)
+    _is_ban_response, _is_account_issue, _request_json)
 from weibo_tool.commands.relations_sync import (
     _load_json, _save_json, _now_iso, run_following, run_fans)
 from weibo_tool.verified_config import is_organization, should_skip_organization
+from weibo_tool import fof
 
 DATA_ROOT = os.path.join(_SRC_DIR, 'data', 'relations')
 CACHE_ROOT = os.path.join(_SRC_DIR, '.cache', 'profile_visit')
@@ -107,22 +108,19 @@ _SERVER_VERSION = 'v2026.09.02.2'
 # Friends-of-friends ("关注的关注") source — a THIRD traversal list, parallel to
 # following / fans.
 #
-# Weibo exposes no "2nd-degree" endpoint, so we synthesise the list by crawling
-# the FULL follow list of every one of the owner's friends (`friendships/friends`),
-# then union the results. The per-friend crawl is cached (resumable), and the
-# union is written as a normal relation snapshot so the rest of this module can
-# treat it like any other list. The owner's own following + fans are excluded so
-# the list is genuinely NEW exposure (visiting someone already covered by the
-# following/fans lists is wasted work).
+# The crawl itself lives in `weibo_tool.fof` (shared with `stranger-visit`,
+# which needs the very same pool): ONE implementation, ONE cache directory
+# (src/.cache/fof/<owner_uid>/<friend_uid>.json). We synthesise the list by
+# crawling the FULL follow list of every one of the owner's friends
+# (`friendships/friends`), then union the results into a normal relation snapshot
+# so the rest of this module can treat it like any other list. The owner's own
+# following + fans are excluded so the list is genuinely NEW exposure (visiting
+# someone already covered by the following/fans lists is wasted work).
 #
 # NOTE: the first crawl is HEAVY (one paginated request per friend, ~1250 for a
 # typical account). It is fully resumable — interrupted runs skip already-cached
 # friends — and cached afterwards, so later runs are cheap.
 FOF_SNAPSHOT_NAME = 'friends_of_friends.json'
-FOF_FOLLOW_API = 'https://weibo.com/ajax/friendships/friends?uid=%s&page=%d&count=50'
-FOF_PAGE_SIZE = 50          # what FOLLOW_API returns per page (count=50)
-FOF_SAFETY_PAGES = 40       # hard stop per friend (~2000 follows; Weibo caps ~200)
-FOF_CACHE_SUBDIR = 'fof'     # per-friend caches live under .cache/profile_visit/<uid>/
 
 
 def _snapshot_filename(kind):
@@ -397,7 +395,7 @@ def _apply_profile_updates(owner_uid, kind, users_by_uid):
 
 
 def _verify_registered(auth):
-    """Return the set of uids cake has actually visited, drawn from BOTH
+    """Return the set of uids the owner has actually visited, drawn from BOTH
     self-visible lists returned by topicContent:
         - "我经常访问的人(仅自己可见)"  (frequent contacts — stable)
         - "我的访问记录（仅自己可见）"  (recent visits, split 今天/近7天/更早)
@@ -625,7 +623,10 @@ def _visit_list(auth, owner_uid, kind, uids, args, force=False):
           % (len(done & uid_set), len(uids)))
     print('  elapsed=%ds' % int(time.time() - start))
     print('  progress: %s' % progress_path)
-    return 0
+    # An aborted run (dead session / sustained failure) is a failure, so the
+    # caller / scheduler sees a non-zero exit code. Completed runs return 0 even
+    # when some uids are merely still pending.
+    return 1 if aborted else 0
 
 
 def _sync_relations(auth, kinds, args):
@@ -659,72 +660,13 @@ def _sync_relations(auth, kinds, args):
 # ---------------------------------------------------------------------------
 # friends-of-friends snapshot (the "关注的关注" list)
 # ---------------------------------------------------------------------------
-def _fof_cache_path(owner_uid, fuid):
-    d = os.path.join(CACHE_ROOT, str(owner_uid), FOF_CACHE_SUBDIR)
-    return os.path.join(d, '%s.json' % fuid)
-
-
-def _load_fof_cache(owner_uid, fuid):
-    path = _fof_cache_path(owner_uid, fuid)
-    if not os.path.exists(path):
-        return None
-    try:
-        return _load_json(path, None)
-    except Exception:
-        return None
-
-
-def _save_fof_cache(owner_uid, fuid, recs):
-    path = _fof_cache_path(owner_uid, fuid)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    _save_json(path, recs)
-
-
-def _fof_user_rec(u):
-    return {
-        'uid': str(u.get('id') or u.get('idstr') or ''),
-        'screen_name': u.get('screen_name') or u.get('name') or '',
-        'mbtype': u.get('mbtype') or 0,
-        'mbrank': u.get('mbrank') or 0,
-        'svip': bool(u.get('svip')),
-        'vvip': bool(u.get('vvip')),
-        'verified': bool(u.get('verified')),
-        'verified_type': u.get('verified_type'),
-    }
-
-
-def _crawl_friend_following(auth, fuid, max_pages=FOF_SAFETY_PAGES):
-    """Page one friend's full follow list.
-
-    Returns (records, pages_ok). pages_ok == 0 means the crawl never succeeded
-    (blocked / transient) and the caller must NOT cache it — a cached empty list
-    would permanently hide that friend from the fof pool.
-    """
-    out, pages_ok = {}, 0
-    for page in range(1, max_pages + 1):
-        obj = _request_json(auth, FOF_FOLLOW_API % (fuid, page))
-        _sleep()
-        if obj is None or obj.get('ok') != 1:
-            break
-        users = obj.get('users') or []
-        if not users:
-            break
-        pages_ok += 1
-        for u in users:
-            rec = _fof_user_rec(u)
-            if rec['uid']:
-                out[rec['uid']] = rec
-        if len(users) < FOF_PAGE_SIZE:
-            break  # short page == last page the server will give
-    return list(out.values()), pages_ok
-
-
 def _ensure_fof_snapshot(auth, owner_uid, args, force=False):
     """Build (or refresh) the friends-of-friends snapshot for `owner_uid`.
 
-    Crawls the full follow list of EVERY one of the owner's friends, caches each
-    friend's list under .cache/profile_visit/<uid>/fof/ (resumable), then unions
-    them into data/relations/<uid>/friends_of_friends.json. The owner's own
+    Crawls the full follow list of EVERY one of the owner's friends via
+    `weibo_tool.fof` (which caches each friend's list under
+    src/.cache/fof/<owner_uid>/, resumable and SHARED with stranger-visit), then
+    unions them into data/relations/<uid>/friends_of_friends.json. The owner's own
     following + fans are excluded so the result is genuinely NEW targets — visiting
     someone already covered by the following/fans lists is wasted work.
 
@@ -748,32 +690,14 @@ def _ensure_fof_snapshot(auth, owner_uid, args, force=False):
 
     print('[profile-visit] building fof snapshot from %d friends '
           '(excluding %d own-graph uids)...' % (len(friends), len(exclude)))
-    collected = {}
-    crawled = cached = 0
-    total = len(friends)
-    for i, fuid in enumerate(friends, 1):
-        recs = None if force else _load_fof_cache(owner_uid, fuid)
-        if recs is None:
-            recs, pages_ok = _crawl_friend_following(auth, fuid)
-            if pages_ok == 0:
-                continue  # failed crawl -> skip, don't cache an empty list
-            _save_fof_cache(owner_uid, fuid, recs)
-            crawled += 1
-        else:
-            cached += 1
-        for r in recs:
-            uid = r.get('uid')
-            if uid and uid not in exclude and uid not in collected:
-                collected[uid] = r
-        if i % 50 == 0 or i == total:
-            print('  fof: %d/%d friends (crawled %d, cached %d) -> %d unique targets'
-                  % (i, total, crawled, cached, len(collected)))
+    collected = fof.collect_fof(auth, friends, owner_uid, exclude=exclude,
+                                refresh=force, verbose=True)
 
     snapshot = {
         'users': list(collected.values()),
         'fetched_at': _now_iso(),
         'source': 'friends-of-friends',
-        'friend_count': total,
+        'friend_count': len(friends),
         'excluded_own_graph': len(exclude),
     }
     os.makedirs(os.path.dirname(snap_path), exist_ok=True)

@@ -113,7 +113,7 @@ def _norm_region(loc):
 
 def _verified_label(verified, vtype, vreason=None):
     # Delegates to the config-driven mapping in weibo_tool.verified_config so the
-    # verified_type -> label rules live in config/verified_categories.json.
+    # verified_type -> label rules live in src/config/verified_categories.json.
     return verified_type_label(verified, vtype)
 
 
@@ -744,7 +744,7 @@ def run(args, auth):
     if not auth.ensure_session():
         print('Could not establish a session even after auto-recovery. '
               'If a QR code appeared, scan it, then re-run this command.')
-        return
+        return 1
 
     # Viewer = the account used to actually SEE the blacklisted profiles.
     # It must NOT be the one who blocked them, or profile fetches fail. When no
@@ -754,12 +754,12 @@ def run(args, auth):
         viewer = Auth()
         if not viewer.resolve_uid(args.viewer_uid, args_user=args.viewer_user,
                                   prompt=not args.no_prompt):
-            return
+            return 1
         viewer.load()
         if not viewer.ensure_session():
             print('Viewer account could not be logged in even after auto-recovery. '
                   'Scan the QR if one appeared, then re-run.')
-            return
+            return 1
         print('[blacklist-deep] subject=%s viewer=%s'
               % (auth.uid or auth.label, viewer.uid or viewer.label))
 
