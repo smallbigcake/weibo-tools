@@ -4,9 +4,11 @@
 > 1. **JS-bundle scrape** of `weibo.com/ajax/...` endpoints (probed live with the logged-in session).
 > 2. **Burp Suite capture** of real traffic — adds hosts outside `weibo.com/ajax` (`api.weibo.com/webim`, `rm.api.weibo.com`, `s.weibo.com`, `web.im.weibo.com`) and the *real* request parameters.
 > Captured 2026-08-08T14:41:21.299604+00:00 (UTC).
-> Logged-in (probe) user: `匿名用户A` (uid=7904020000). Capture account (Burp) is a different one (uid 1176110000); uids in captured params are samples.
+> Logged-in (probe) user: `匿名用户A` (uid=<UID_69>). Capture account (Burp) is a different one; uids in captured params are samples.
 > Mutating endpoints probed live: False. (`source: burp` entries are documented-from-capture only.)
 > Total distinct endpoints: 277.
+>
+> Response samples are **de-identified**: uids render as `<UID_n>`, nicknames as `<NAME_n>` (the same `n` is the same account), and bios / avatars / real names as `<REDACTED>`. The endpoint catalog itself is untouched. See `src/inventory_redact.py`.
 >
 > **Generated file — do not edit by hand.** It is rewritten on every `src/api_explorer.py` run (and re-rendered by `src/live_test.py`), so no `.zh-CN` translation is maintained for it; English is the source language.
 
@@ -245,7 +247,7 @@
 | `/ajax/movie/hot_suggest` | GET |  | scraper | dead | 404 | ok=0, message=你访问的地址不存在 top-keys: message,ok |
 | `/ajax/movie/hot_top` | GET |  | scraper | ok | 200 | ok=1 top-keys: data,ok |
 | `/ajax_proxy/chaohua/pcmain/objs` | GET |  | burp | ok_http | 200 | Super-topic (chaohua) proxy |
-| `/u/1176110000` | GET |  | burp | ok_http | 200 | User profile page (HTML) |
+| `/u/<UID_9>` | GET |  | burp | ok_http | 200 | User profile page (HTML) |
 | `/ajax/savefeedback` | POST | yes | scraper | mutating_skipped | ? | mutating (not probed) |
 | `/ajax/savefirstin` | POST | yes | scraper | mutating_skipped | ? | mutating (not probed) |
 
@@ -957,7 +959,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "1176110000",
+  "uid": "<UID_9>",
   "page": "1",
   "with_total": "true"
 }
@@ -1196,7 +1198,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "list_id": "100011176110000",
+  "list_id": "<UID_9>",
   "refresh": "4",
   "since_id": "0",
   "count": "15"
@@ -1237,7 +1239,7 @@
 - **Response top-level keys** (16): `fill_material`, `followers_count`, `has_filtered_attentions`, `has_filtered_fans`, `next_cursor`, `ok`, `previous_cursor`, `screenName`, `show_related_topic`, `show_unread`, `sort_type`, `total_number`, `type`, `use_sink_stragety`, `use_status_strategy`, `users`
 - **Response sample (redacted)**:
   ```json
-  {"followers_count": （已脱敏）, "users": "<list>", "has_filtered_attentions": true, "next_cursor": 20, "previous_cursor": 0, "total_number": （已脱敏）, "use_sink_stragety": false, "has_filtered_fans": false, "use_status_strategy": false, "show_related_topic": false, "sort_type": 0, "type": 0, "show_unread": false, "fill_material": 0, "screenName": "匿名用户A", "ok": 1}
+  {"followers_count": "（已脱敏）", "users": "<list>", "has_filtered_attentions": true, "next_cursor": 20, "previous_cursor": 0, "total_number": "（已脱敏）", "use_sink_stragety": false, "has_filtered_fans": false, "use_status_strategy": false, "show_related_topic": false, "sort_type": 0, "type": 0, "show_unread": false, "fill_material": 0, "screenName": "<NAME_70>", "ok": 1}
   ```
 
 ### `weibo.com/ajax/getNavConfig` — Navigation config
@@ -1991,7 +1993,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "1176110000"
+  "uid": "<UID_9>"
 }
   ```
 - **Response top-level keys** (2): `data`, `ok`
@@ -2227,7 +2229,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "7904020000"
+  "uid": "<UID_69>"
 }
   ```
 - **Response top-level keys** (2): `data`, `ok`
@@ -2249,7 +2251,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "7904020000"
+  "uid": "<UID_69>"
 }
   ```
 - **Response top-level keys** (2): `data`, `ok`
@@ -2401,7 +2403,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "1176110000",
+  "uid": "<UID_9>",
   "scene": "profile"
 }
   ```
@@ -2490,7 +2492,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "1176110000"
+  "uid": "<UID_9>"
 }
   ```
 - **Response top-level keys** (2): `data`, `ok`
@@ -2752,7 +2754,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "7904020000"
+  "uid": "<UID_69>"
 }
   ```
 - **Response top-level keys** (2): `data`, `ok`
@@ -2982,7 +2984,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "7904020000"
+  "uid": "<UID_69>"
 }
   ```
 - **Response top-level keys** (2): `message`, `ok`
@@ -3020,7 +3022,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "7904020000"
+  "uid": "<UID_69>"
 }
   ```
 - **Response top-level keys** (2): `data`, `ok`
@@ -3082,7 +3084,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "1176110000",
+  "uid": "<UID_9>",
   "page": "1",
   "with_total": "true"
 }
@@ -3152,7 +3154,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "1176110000",
+  "uid": "<UID_9>",
   "page": "1",
   "feature": "0"
 }
@@ -3332,14 +3334,14 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "7904020000",
+  "uid": "<UID_69>",
   "count": 10
 }
   ```
 - **Response top-level keys** (3): `ok`, `result`, `uid`
 - **Response sample (redacted)**:
   ```json
-  {"result": "<dict>", "uid": 7904020000, "ok": 1}
+  {"result": "<dict>", "uid": "<UID_69>", "ok": 1}
   ```
 
 ### `weibo.com/ajax/stopic/cates` — /ajax/stopic/cates
@@ -3403,7 +3405,7 @@
 - **Query params** (real captured if available):
   ```
   {
-  "uid": "7904020000"
+  "uid": "<UID_69>"
 }
   ```
 - **Response top-level keys** (2): `data`, `ok`
@@ -3424,7 +3426,7 @@
 - **Function**: Proxy into the Super-Topic (超话) subsystem. `pcmain/objs` lists objects/boards of a super topic. Requires real uid context.
 - **Captured status**: 200
 
-### `weibo.com/u/1176110000` — User profile page (HTML)
+### `weibo.com/u/<UID_9>` — User profile page (HTML)
 
 - **Host**: `weibo.com`
 - **Method**: GET

@@ -25,11 +25,16 @@ Probing rules
 - Endpoints whose path implies a mutation are treated as MUTATING and only
   called when `--mutate` is passed; otherwise listed but skipped.
 - Only structural facts are persisted. PII/credential values are redacted.
+- Both outputs are de-identified by default: `src/inventory_redact.py` rewrites
+  every uid/nickname/bio/avatar in the captured samples to `<UID_n>` / `<NAME_n>`
+  / `<REDACTED>` before the files are written. Pass `--no-redact` to keep the raw
+  values in a purely local run (never commit that output).
 
 Usage (from project root):
     python src/api_explorer.py                # probe scraped endpoints + merge burp
     python src/api_explorer.py --mutate       # also probe mutating endpoints
     python src/api_explorer.py --no-probe     # rebuild docs from existing json
+    python src/api_explorer.py --no-redact    # LOCAL ONLY: keep raw captured values
     python src/tmp/extract_endpoints.py           # refresh the JS-bundle endpoint list
 """
 import argparse
@@ -50,6 +55,7 @@ from logutil import setup as _setup_logging
 _setup_logging()
 
 from auth import Auth, USER_AGENT
+from inventory_redact import redact_payload
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOC_DIR = os.path.join(HERE, '..', 'doc')
@@ -487,7 +493,9 @@ def probe_one(auth, url, whoami, mutate):
     params = {}
     low = url.lower()
     if 'uid' in low or 'user' in low:
-        params['uid'] = whoami.get('uid', '7904020000')
+        uid = whoami.get('uid')
+        if uid:
+            params['uid'] = uid
     if any(k in low for k in ('show', 'longtext', 'buildcomments', 'setlike',
                               'likelist', 'repost', 'destroy', 'comment',
                               'mentions', 'edit', 'translate', 'extend')):
@@ -692,6 +700,9 @@ def main():
                     help='also call mutating (POST) endpoints')
     ap.add_argument('--no-probe', action='store_true',
                     help='regenerate docs from existing inventory json')
+    ap.add_argument('--no-redact', action='store_true',
+                    help='keep raw captured values (LOCAL ONLY - the inventory '
+                         'embeds third-party PII, never commit it unredacted)')
     args = ap.parse_args()
 
     if not args.no_probe:
@@ -717,19 +728,28 @@ def main():
             'endpoint_count': len(endpoints),
             'endpoints': {('%s %s %s' % k): v for k, v in endpoints.items()},
         }
+        # The captured responses embed real third-party PII, so the committed
+        # catalogue is de-identified by default (see src/inventory_redact.py).
+        if not args.no_redact:
+            payload = redact_payload(payload)
         with open(INVENTORY_JSON, 'w', encoding='utf-8') as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
-        print('Wrote', INVENTORY_JSON, '(%d endpoints)' % len(endpoints))
+        print('Wrote', INVENTORY_JSON, '(%d endpoints)%s'
+              % (len(endpoints), '' if args.no_redact else ' [de-identified]'))
 
-    render_markdown()
+    render_markdown(redact=not args.no_redact)
 
 
-def render_markdown():
+def render_markdown(redact=True):
     if not os.path.exists(INVENTORY_JSON):
         print('No inventory json found; run without --no-probe first.')
         return
     with open(INVENTORY_JSON, 'r', encoding='utf-8') as f:
         payload = json.load(f)
+    if redact:
+        # Idempotent: the file is normally already redacted on write. This also
+        # covers a json produced by an older, non-redacting run.
+        payload = redact_payload(payload)
     endpoints = payload['endpoints']
 
     lines = []
@@ -745,13 +765,19 @@ def render_markdown():
                  'the *real* request parameters.')
     lines.append('> Captured %s (UTC).' % payload.get('generated_at', '?'))
     lines.append('> Logged-in (probe) user: `%s` (uid=%s). Capture account '
-                 '(Burp) is a different one (uid 1176110000); uids in captured '
+                 '(Burp) is a different one; uids in captured '
                  'params are samples.' % (payload.get('whoami', {}).get('name', '?'),
                                           payload.get('whoami', {}).get('uid', '?')))
     lines.append('> Mutating endpoints probed live: %s. (`source: burp` '
                  'entries are documented-from-capture only.)'
                  % payload.get('mutate', False))
     lines.append('> Total distinct endpoints: %s.' % payload.get('endpoint_count', '?'))
+    lines.append('>')
+    lines.append('> Response samples are **de-identified**: uids render as '
+                 '`<UID_n>`, nicknames as `<NAME_n>` (the same `n` is the same '
+                 'account), and bios / avatars / real names as `<REDACTED>`. '
+                 'The endpoint catalog itself is untouched. '
+                 'See `src/inventory_redact.py`.')
     lines.append('>')
     lines.append('> **Generated file — do not edit by hand.** It is rewritten on every '
                  '`src/api_explorer.py` run (and re-rendered by `src/live_test.py`), so no '

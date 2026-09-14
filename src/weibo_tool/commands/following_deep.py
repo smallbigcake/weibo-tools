@@ -15,7 +15,7 @@ comparable to `blacklist-deep`'s outputs for the same subject.
 
 Usage (from src/):
     python weibo-tool.py following-deep --uid <subject>
-    python weibo-tool.py following-deep --user cake --with-follows --with-posts
+    python weibo-tool.py following-deep --user <label> --with-follows --with-posts
 """
 import argparse
 import json
@@ -85,7 +85,7 @@ def fetch_following_list(auth, uid, force=False):
     list (the people `uid` follows). Cached under the following_deep cache dir.
 
     Uses the same endpoint as blacklist-deep's Phase 2 (per-user follow lists),
-    but here `uid` is the subject (cake) itself. Returns a list of uid strings.
+    but here `uid` is the subject (author) itself. Returns a list of uid strings.
     """
     cache = _following_cache_path(uid)
     if not force and os.path.exists(cache):

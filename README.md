@@ -121,6 +121,7 @@ src/
 ├── blacklist_analyzer.py   Standalone blacklist analyzer (pre-CLI script)
 ├── chat.py                 Group-chat monitor (Bayeux long-polling)
 ├── api_explorer.py         Scrapes Weibo JS bundles -> doc/api_inventory.*
+├── inventory_redact.py     De-identifies the generated inventory (PII -> <UID_n>/<NAME_n>)
 ├── static_fetch.py         Mirrors a CDN domain's static assets -> static/
 ├── live_test.py            Probes every catalogued endpoint -> live_status
 ├── logutil.py              Logging setup
@@ -153,7 +154,7 @@ Only templates are committed; copy and fill in your own values.
 | Template | Real file (git-ignored) | Purpose |
 |---|---|---|
 | `config/chat.ini.example` | `config/chat.ini` | UID, group GID and optional proxy for `chat.py` |
-| `config/experiment.local.json.example` | `config/experiment.local.json` | `author_uid` / `viewer_uid` for the experiment scripts |
+| `config/experiment.local.json.example` | `config/experiment.local.json` | `author_uid` / `viewer_uid` plus the `author_label` / `viewer_label` code names for the experiment scripts and automation runners |
 
 `src/config/verified_categories.json` **is** committed: it is the single source
 of truth for verification-type labels, tier mapping, the official/media
@@ -179,8 +180,12 @@ requires no code change. `src/config/logging.ini` lives next to it and drives
 
 > `doc/api_inventory.md` and `doc/api_inventory.json` are **generated** by
 > `src/api_explorer.py` (and re-rendered by `src/live_test.py`). Do not edit
-> them by hand. Because they are regenerated on every run, no translated copy is
-> kept — the conventions section at the top of the file explains every column.
+> them by hand. They are **de-identified on write** by `src/inventory_redact.py`:
+> uids become `<UID_n>`, nicknames `<NAME_n>` (same `n` = same account), and
+> bios / avatars / real names `<REDACTED>` — the captured samples embed real
+> third-party data, so never commit a `--no-redact` run. Because they are
+> regenerated on every run, no translated copy is kept — the conventions section
+> at the top of the file explains every column.
 
 Documentation convention for this repository: every document is written in
 English as the default, with the Chinese translation next to it using a

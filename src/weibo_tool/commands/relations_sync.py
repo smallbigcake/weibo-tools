@@ -57,9 +57,9 @@ With the dated backups these bound how long a relation has existed, at the
 resolution of the snapshot schedule.
 
 Usage (from src/):
-    python weibo-tool.py following-sync --user cake
-    python weibo-tool.py fans-sync --user cake --csv
-    python weibo-tool.py fans-sync --user cake --resume   # continue an
+    python weibo-tool.py following-sync --user <label>
+    python weibo-tool.py fans-sync --user <label> --csv
+    python weibo-tool.py fans-sync --user <label> --resume   # continue an
                                                           # interrupted crawl
 """
 import argparse

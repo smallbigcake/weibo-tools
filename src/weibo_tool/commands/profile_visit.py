@@ -57,11 +57,11 @@ straight from the relation snapshot, so the cut happens BEFORE any request is
 sent. Pass `--no-svip-only` to visit every personal account regardless of tier.
 
 Usage (from src/):
-    python weibo-tool.py profile-visit --user cake --kind following
-    python weibo-tool.py profile-visit --user cake --kind fans
-    python weibo-tool.py profile-visit --user cake --kind both --limit 200
-    python weibo-tool.py profile-visit --user cake --kind fof
-    python weibo-tool.py profile-visit --user cake --kind all --limit 200
+    python weibo-tool.py profile-visit --user <label> --kind following
+    python weibo-tool.py profile-visit --user <label> --kind fans
+    python weibo-tool.py profile-visit --user <label> --kind both --limit 200
+    python weibo-tool.py profile-visit --user <label> --kind fof
+    python weibo-tool.py profile-visit --user <label> --kind all --limit 200
 """
 import argparse
 import json

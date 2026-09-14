@@ -1,10 +1,10 @@
-"""Daily profile-visit runner for the `cake` account (uid resolved via cookies.labels.json).
+"""Daily profile-visit runner for the `author` account (uid resolved via cookies.labels.json).
 
-Invoked once per day by the `daily-weibo-profile-visit-cake` CodeBuddy
-automation. It reuses the real commands so every behavior stays identical to
-running them by hand:
+Invoked once per day by the `daily-weibo-profile-visit` CodeBuddy automation.
+It reuses the real commands so every behavior stays identical to running them
+by hand:
 
-  * loads cake's saved cookie session from `cookies.<uid>.weibo`
+  * loads author's saved cookie session from `cookies.<uid>.weibo`
   * calls `auth.ensure_session()` -- which silently renews the short-term
     session via the long-lived SSO TGT (no QR scan) and only falls back to a
     QR prompt when the TGT itself is spent.
@@ -28,9 +28,9 @@ work):
 
 Run from the project root (a `cd src` is enough) with the project venv:
 
-    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py
-    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py --sync
-    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit_cake.py --no-fof
+    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit.py
+    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit.py --sync
+    venvs/weibo-env\\Scripts\\python.exe automations\\run_profile_visit.py --no-fof
 
 Flags:
     --sync          refresh the following/fans relation snapshots first.
@@ -42,7 +42,7 @@ Flags:
     --no-svip-only  visit every personal account regardless of tier.
     --refresh-fof-cache  re-crawl friends' follow lists (ignore the cache).
 
-Appends one JSON line to src/automations/profile_visit_cake_log.jsonl with the
+Appends one JSON line to src/automations/profile_visit_log.jsonl with the
 run summary (coverage per leg + return code + elapsed seconds). That log file is
 git-ignored (see .gitignore: src/automations/*.jsonl); only this script is
 tracked.
@@ -64,8 +64,16 @@ from weibo_tool import fof
 from weibo_tool.commands.profile_visit import run_visit
 from weibo_tool.commands.stranger_visit import run as run_stranger_visit
 
-CAKE_LABEL = 'cake'  # resolves to the cake uid via cookies.labels.json
-LOG = os.path.join(HERE, 'profile_visit_cake_log.jsonl')
+ROOT = os.path.dirname(SRC)  # project root
+_CFG = {}
+try:
+    with open(os.path.join(ROOT, 'config', 'experiment.local.json'), encoding='utf-8') as _f:
+        _CFG = json.load(_f)
+except Exception:
+    _CFG = {}
+
+AUTHOR_LABEL = _CFG.get('author_label', 'author')  # resolves to the author uid via cookies.labels.json (non-committed config)
+LOG = os.path.join(HERE, 'profile_visit_log.jsonl')
 DATA_ROOT = os.path.join(SRC, 'data', 'relations')
 CACHE_ROOT = os.path.join(SRC, '.cache', 'profile_visit')
 STRANGER_CACHE = os.path.join(SRC, '.cache', 'stranger_visit')
@@ -151,8 +159,8 @@ def main():
     args = ap.parse_args()
 
     auth = Auth()
-    if not auth.resolve_uid(args_user=CAKE_LABEL, prompt=False):
-        print('ERROR: could not resolve the "%s" identity.' % CAKE_LABEL,
+    if not auth.resolve_uid(args_user=AUTHOR_LABEL, prompt=False):
+        print('ERROR: could not resolve the "%s" identity.' % AUTHOR_LABEL,
               flush=True)
         return 1
     auth.load()
@@ -202,7 +210,7 @@ def main():
     rec = {
         'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
         'cycle': 'auto',
-        'user': CAKE_LABEL,
+        'user': AUTHOR_LABEL,
         'uid': owner_uid,
         'kind': args.kind,
         'fof_enabled': bool(args.fof),

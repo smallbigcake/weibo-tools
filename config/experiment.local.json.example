@@ -1,4 +1,6 @@
 {
+  "author_label": "YOUR_AUTHOR_LABEL",
   "author_uid": "YOUR_AUTHOR_UID",
+  "viewer_label": "YOUR_VIEWER_LABEL",
   "viewer_uid": "YOUR_VIEWER_UID"
 }

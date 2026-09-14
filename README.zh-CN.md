@@ -115,6 +115,7 @@ src/
 ├── blacklist_analyzer.py   独立的黑名单分析脚本（早于 CLI 的版本）
 ├── chat.py                 群聊监听（Bayeux 长轮询）
 ├── api_explorer.py         抓取微博 JS 产物 -> doc/api_inventory.*
+├── inventory_redact.py     对生成的接口目录做去标识化（PII -> <UID_n>/<NAME_n>）
 ├── static_fetch.py         镜像某个 CDN 域名的静态资源 -> static/
 ├── live_test.py            实测每个已编目接口 -> live_status
 ├── logutil.py              日志初始化
@@ -147,7 +148,7 @@ src/
 | 模板 | 实际文件（已 git 忽略） | 用途 |
 |---|---|---|
 | `config/chat.ini.example` | `config/chat.ini` | `chat.py` 用的 UID、群 GID 与可选代理 |
-| `config/experiment.local.json.example` | `config/experiment.local.json` | 实验脚本用的 `author_uid` / `viewer_uid` |
+| `config/experiment.local.json.example` | `config/experiment.local.json` | 实验脚本与自动化 runner 用的 `author_uid` / `viewer_uid` 及代号 `author_label` / `viewer_label` |
 
 `src/config/verified_categories.json` **是**提交的：它是认证类型标签、档位映射、
 官方/官媒排除名单以及 `profile_visit.skip_organization` 策略的唯一事实来源，供
@@ -170,7 +171,10 @@ Python 里不再硬编码任何账号分类规则，改这个 JSON 无需改动�
 | [src/static/README.zh-CN.md](src/static/README.zh-CN.md) | 简体中文 | 中文翻译 |
 
 > `doc/api_inventory.md` 与 `doc/api_inventory.json` 由 `src/api_explorer.py`
-> **生成**（并由 `src/live_test.py` 重新渲染），请勿手工编辑。由于每次运行都会
+> **生成**（并由 `src/live_test.py` 重新渲染），请勿手工编辑。写入时由
+> `src/inventory_redact.py` **默认去标识化**：uid 变为 `<UID_n>`、昵称变为
+> `<NAME_n>`（同一 `n` 即同一账号）、简介/头像/真名变为 `<REDACTED>`——因为抓取
+> 样本中含有真实第三方数据，请勿提交 `--no-redact` 的运行结果。由于每次运行都会
 > 覆盖，因此不保留翻译副本；文件开头的 Conventions 小节解释了每一列的含义。
 
 本仓库的文档约定：所有文档默认以英文撰写，并在同级目录提供 `.zh-CN` 语言后缀的

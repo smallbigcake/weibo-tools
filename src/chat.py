@@ -77,7 +77,7 @@ def load_config(path=CONFIG_PATH):
     return uid, group_gid, proxies
 
 
-UID, CAKE_GROUP_GID, PROXIES = load_config()
+UID, AUTHOR_GROUP_GID, PROXIES = load_config()
 
 
 class Chat(object):
@@ -206,7 +206,7 @@ class Chat(object):
         params = {
             'setTimeout': 50,
             'content': msg,
-            'id': CAKE_GROUP_GID,
+            'id': AUTHOR_GROUP_GID,
             'media_type': 0,
             'annotations': json.dumps({
                 "webchat": 1,

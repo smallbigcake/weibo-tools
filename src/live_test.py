@@ -32,6 +32,7 @@ from logutil import setup as _setup_logging
 _setup_logging()
 from auth import Auth, USER_AGENT
 import api_explorer as ae
+from inventory_redact import redact_payload
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOC_DIR = os.path.join(HERE, '..', 'doc')
@@ -178,6 +179,9 @@ def main():
             rec['live_error'] = str(e)[:160]
         print('%-22s %-40s -> %s' % (rec['live_status'], host + path, params))
 
+    # Keep the inventory de-identified even if it was produced by an older,
+    # non-redacting run of api_explorer.py (redaction is idempotent).
+    inv = redact_payload(inv)
     json.dump(inv, open(INV, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
     c = Counter(r.get('live_status') for r in endpoints.values())

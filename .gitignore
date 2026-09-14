@@ -17,8 +17,9 @@ session*.json
 
 # Local config (contains account / proxy settings, do NOT commit).
 # Real file lives at project root config/; the .example template is committed.
-config/chat.ini
-config/experiment.local.json
+# Ignore everything under config/ except committed templates (*.example).
+config/*
+!config/*.example
 
 # Logs
 src/log/*.log
@@ -44,6 +45,9 @@ src/automations/*.jsonl
 # Analysis artifacts (contain real Weibo UIDs / profile PII; generated locally,
 # do NOT commit). Re-run `blacklist-deep` to regenerate.
 data/
+
+# Logs (generated per function; do NOT commit)
+logs/
 
 # CodeBuddy working memory (local, per-machine context)
 .codebuddy/

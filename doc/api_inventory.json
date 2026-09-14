@@ -1,7 +1,7 @@
 {
   "generated_at": "2026-08-08T14:41:21.299604+00:00",
   "whoami": {
-    "uid": "7904020000",
+    "uid": "<UID_69>",
     "name": "匿名用户A"
   },
   "mutate": false,
@@ -339,7 +339,7 @@
       "path": "/ajax/favorites/all_fav",
       "source": "both",
       "real_query": {
-        "uid": "1176110000",
+        "uid": "<UID_9>",
         "page": "1",
         "with_total": "true"
       },
@@ -348,7 +348,7 @@
       "function_desc": "List of weibos the user has favorited (collected). `uid`, `page`, `with_total`.",
       "capture_count": 1,
       "capture_status": "200",
-      "capture_resp_head": "{\"ok\":1,\"data\":{\"status\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Fri Dec 19 15:52:34 +0800 2025\",\"id\":5245594937592886,\"idstr\":\"5245594937592886\",\"mid\":\"5245594937592886\",\"mblogid\":\"Qj88dvRfU\",\"user\":{\"id\":9075717920,\"idstr\":\"9075717920\",\"pc_new\":0,\"screen_name\":\"稻谷漫剧剧场\",\"profile_image_url\":\"https://tvax1.sinaimg.cn/crop.0.0.956.956.50/009UcMP6ly8i73fr70ib1j30qk0qk3zo.jpg?KID=imgbed,tva&Expires=1786209788&ssig=C6aXUWxKkl\",\"profile_url\":\"/u/9075717920\",\"verified\":true,\"verified_type\":7,\"",
+      "capture_resp_head": "{\"ok\":1,\"data\":{\"status\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Fri Dec 19 15:52:34 +0800 2025\",\"id\":\"<UID_2>\",\"idstr\":\"<UID_2>\",\"mid\":\"<UID_2>\",\"mblogid\":\"Qj88dvRfU\",\"user\":{\"id\":\"<UID_1>\",\"idstr\":\"<UID_1>\",\"pc_new\":0,\"screen_name\":\"<NAME_1>\",\"profile_image_url\":\"<REDACTED>\",\"profile_url\":\"/u/<UID_1>\",\"verified\":true,\"verified_type\":7,\"",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -419,7 +419,7 @@
       "function_desc": "User-defined tags/categories for favorites.",
       "capture_count": 18,
       "capture_status": "200",
-      "capture_resp_head": "{\"tags\":[{\"id\":3551035854474587,\"tag\":\"2001太空漫游\",\"count\":1},{\"id\":3394911,\"tag\":\"CVE\",\"count\":1},{\"id\":3567442700859233,\"tag\":\"Exploit\",\"count\":1},{\"id\":4935997996662944,\"tag\":\"ISC2\",\"count\":1},{\"id\":3830007280486795,\"tag\":\"使女的故事\",\"count\":1},{\"id\":3526629,\"tag\":\"趋势科技\",\"count\":1}],\"total_number\":26,\"unclassified_num\":1640,\"fav_total_num\":2673,\"ok\":1}",
+      "capture_resp_head": "{\"tags\":[{\"id\":\"<UID_3>\",\"tag\":\"<REDACTED>\",\"count\":1},{\"id\":\"<UID_4>\",\"tag\":\"<REDACTED>\",\"count\":1},{\"id\":\"<UID_5>\",\"tag\":\"<REDACTED>\",\"count\":1},{\"id\":\"<UID_6>\",\"tag\":\"<REDACTED>\",\"count\":1},{\"id\":\"<UID_7>\",\"tag\":\"<REDACTED>\",\"count\":1},{\"id\":\"<UID_8>\",\"tag\":\"<REDACTED>\",\"count\":1}],\"total_number\":26,\"unclassified_num\":1640,\"fav_total_num\":2673,\"ok\":1}",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -500,7 +500,7 @@
       "function_desc": "The user's feed groups (关注/热门/自定义分组) used by the home timeline selector.",
       "capture_count": 5,
       "capture_status": "200",
-      "capture_resp_head": "{\"groups\":[{\"title\":\"默认分组\",\"group_type\":0,\"group\":[{\"gid\":\"100011176110000\",\"uid\":\"1176110000\",\"title\":\"全部关注\",\"navigation_title\":\"关注\",\"count\":0,\"type\":\"1\",\"frequency\":0,\"sysgroup\":2,\"ad_scene\":1},{\"gid\":\"110001176110000\",\"uid\":\"1176110000\",\"title\":\"最新微博\",\"count\":0,\"type\":\"20\",\"frequency\":0,\"sysgroup\":2,\"settings\":{\"remind\":0},\"apipath\":\"statuses/friends/timeline\",\"is_unread\":0,\"ad_scene\":1},{\"gid\":\"3512659532137391\",\"uid\":1176110000,\"title\":\"特别关注\",\"count\":0,\"type\":\"0\",\"settings\":{\"remind\":1,\"pri",
+      "capture_resp_head": "{\"groups\":[{\"title\":\"默认分组\",\"group_type\":0,\"group\":[{\"gid\":\"<UID_9>\",\"uid\":\"<UID_9>\",\"title\":\"全部关注\",\"navigation_title\":\"关注\",\"count\":0,\"type\":\"1\",\"frequency\":0,\"sysgroup\":2,\"ad_scene\":1},{\"gid\":\"<UID_9>\",\"uid\":\"<UID_9>\",\"title\":\"最新微博\",\"count\":0,\"type\":\"20\",\"frequency\":0,\"sysgroup\":2,\"settings\":{\"remind\":0},\"apipath\":\"statuses/friends/timeline\",\"is_unread\":0,\"ad_scene\":1},{\"gid\":\"3512659532137391\",\"uid\":\"<UID_9>\",\"title\":\"特别关注\",\"count\":0,\"type\":\"0\",\"settings\":{\"remind\":1,\"pri",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -643,7 +643,7 @@
       "function_desc": "Weibo feed for one feed group; needs `group_id` + `refresh_type`.",
       "capture_count": 3,
       "capture_status": "200",
-      "capture_resp_head": "{\"ok\":1,\"statuses\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Sat Aug 08 22:19:15 +0800 2026\",\"id\":5329766236291766,\"idstr\":\"5329766236291766\",\"mid\":\"5329766236291766\",\"mblogid\":\"Rcum3qoM6\",\"user\":{\"id\":6419748247,\"idstr\":\"6419748247\",\"pc_new\":7,\"screen_name\":\"寝取的史官\",\"profile_image_url\":\"https://tvax4.sinaimg.cn/crop.0.0.1024.1024.50/0070sBMzly8h1ha6yhk3dj30sg0sgjsj.jpg?KID=imgbed,tva&Expires=1786209882&ssig=0%2FT4mP7k4w\",\"profile_url\":\"/u/6419748247\",\"verified\":true,\"verified_type\":0,\"dom",
+      "capture_resp_head": "{\"ok\":1,\"statuses\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Sat Aug 08 22:19:15 +0800 2026\",\"id\":\"<UID_11>\",\"idstr\":\"<UID_11>\",\"mid\":\"<UID_11>\",\"mblogid\":\"Rcum3qoM6\",\"user\":{\"id\":\"<UID_10>\",\"idstr\":\"<UID_10>\",\"pc_new\":7,\"screen_name\":\"<NAME_10>\",\"profile_image_url\":\"<REDACTED>\",\"profile_url\":\"/u/<UID_10>\",\"verified\":true,\"verified_type\":0,\"dom",
       "live_status": "exists_param_needed",
       "live_http_status": 400,
       "live_available": false
@@ -789,7 +789,7 @@
       "path": "/ajax/feed/unreadfriendstimeline",
       "source": "both",
       "real_query": {
-        "list_id": "100011176110000",
+        "list_id": "<UID_9>",
         "refresh": "4",
         "since_id": "0",
         "count": "15"
@@ -799,7 +799,7 @@
       "function_desc": "Friend (following) timeline of new/unread posts since last view. Returns `statuses[]`.",
       "capture_count": 3,
       "capture_status": "200",
-      "capture_resp_head": "{\"ok\":1,\"statuses\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Sat Aug 08 18:36:49 +0800 2026\",\"id\":5329710255180162,\"idstr\":\"5329710255180162\",\"mid\":\"5329710255180162\",\"mblogid\":\"RcsTLlJB0\",\"user\":{\"id\":5706092637,\"idstr\":\"5706092637\",\"pc_new\":0,\"screen_name\":\"清月已经不困了\",\"profile_image_url\":\"https://tvax3.sinaimg.cn/crop.0.0.558.558.50/006eabmdly8hwhgj1jo6hj30fi0fidgv.jpg?KID=imgbed,tva&Expires=1786209866&ssig=Ufnp6dqASa\",\"profile_url\":\"/u/5706092637\",\"verified\":true,\"verified_type\":0,\"verif",
+      "capture_resp_head": "{\"ok\":1,\"statuses\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Sat Aug 08 18:36:49 +0800 2026\",\"id\":\"<UID_13>\",\"idstr\":\"<UID_13>\",\"mid\":\"<UID_13>\",\"mblogid\":\"RcsTLlJB0\",\"user\":{\"id\":\"<UID_12>\",\"idstr\":\"<UID_12>\",\"pc_new\":0,\"screen_name\":\"<NAME_12>\",\"profile_image_url\":\"<REDACTED>\",\"profile_url\":\"/u/<UID_12>\",\"verified\":true,\"verified_type\":0,\"verif",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -899,7 +899,7 @@
           "type": 0,
           "show_unread": false,
           "fill_material": 0,
-          "screenName": "匿名用户A",
+          "screenName": "<NAME_70>",
           "ok": 1
         }
       },
@@ -1381,7 +1381,7 @@
       "function_desc": "Lightweight unread badge for the message nav icon.",
       "capture_count": 10,
       "capture_status": "200",
-      "capture_resp_head": "{\"data\":{\"apps\":[],\"groups\":[{\"100091176110000\":0},{\"4551686054485057\":0},{\"4385547558274230\":0},{\"211007160000430350\":0},{\"100051176110000\":0},{\"4014816358246018\":0},{\"201007230000738677\":0},{\"3664125916141441\":6},{\"3655768752601251\":0},{\"4199083046341652\":0},{\"211007160000439620\":0},{\"3917167004898113\":0},{\"4597333184492582\":0},{\"3471777357830348\":0},{\"3793995199389770\":0},{\"4419077709345421\":0},{\"3512659532137391\":0},{\"3774696414021446\":0}],\"page_friends_to_me\":0,\"page_group_to_me\":79,\"supert",
+      "capture_resp_head": "{\"data\":{\"apps\":[],\"groups\":[{\"<UID_9>\":0},{\"4551686054485057\":0},{\"4385547558274230\":0},{\"211007160000430350\":0},{\"<UID_9>\":0},{\"4014816358246018\":0},{\"201007230000738677\":0},{\"3664125916141441\":6},{\"3655768752601251\":0},{\"4199083046341652\":0},{\"211007160000439620\":0},{\"3917167004898113\":0},{\"4597333184492582\":0},{\"3471777357830348\":0},{\"3793995199389770\":0},{\"4419077709345421\":0},{\"3512659532137391\":0},{\"3774696414021446\":0}],\"page_friends_to_me\":0,\"page_group_to_me\":79,\"supert",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -1834,7 +1834,7 @@
       "function_desc": "Metadata + play URLs for a live stream.",
       "capture_count": 2,
       "capture_status": "200",
-      "capture_resp_head": "{\"data\":{\"liveId\":\"1022:2321325327063036067922\",\"status\":3,\"cover\":\"https://wx2.sinaimg.cn/large/e312fc84gy1ifo5v1eb4zj20u0140ahv.jpg\",\"startTime\":1785554315000,\"endTime\":1785557063000,\"width\":720,\"height\":1280,\"mid\":\"5327063250900034\",\"createType\":2,\"createSource\":2,\"title\":\"马来西亚化妆聊一聊🪞\",\"watch_limit\":0,\"user\":{\"uid\":3809672324,\"screenName\":\"王鹤润rain\",\"profileImageUrl\":\"https://tvax1.sinaimg.cn/crop.0.0.1080.1080.50/e312fc84ly8idekxmre5nj20u00u077g.jpg?KID=imgbed,tva&Expires=1786209786&ssig=LvMiM",
+      "capture_resp_head": "{\"data\":{\"liveId\":\"1022:2321325327063036067922\",\"status\":3,\"cover\":\"https://wx2.sinaimg.cn/large/e312fc84gy1ifo5v1eb4zj20u0140ahv.jpg\",\"startTime\":1785554315000,\"endTime\":1785557063000,\"width\":720,\"height\":1280,\"mid\":\"5327063250900034\",\"createType\":2,\"createSource\":2,\"title\":\"马来西亚化妆聊一聊🪞\",\"watch_limit\":0,\"user\":{\"uid\":\"<UID_14>\",\"screenName\":\"<NAME_14>\",\"profileImageUrl\":\"https://tvax1.sinaimg.cn/crop.0.0.1080.1080.50/e312fc84ly8idekxmre5nj20u00u077g.jpg?KID=imgbed,tva&Expires=1786209786&ssig=LvMiM",
       "live_status": "exists_param_needed",
       "live_http_status": 400,
       "live_available": false
@@ -2279,14 +2279,14 @@
       "path": "/ajax/profile/detail",
       "source": "both",
       "real_query": {
-        "uid": "1176110000"
+        "uid": "<UID_9>"
       },
       "real_post": {},
       "function_title": "User profile detail",
       "function_desc": "Extended self profile: birthday, gender, ip_location, education, career, sunshine credit.",
       "capture_count": 3,
       "capture_status": "200",
-      "capture_resp_head": "{\"data\":{\"sesameCredit\":\"（已脱敏）\",\"career\":{\"company\":\"（已脱敏）\"},\"company\":\"（已脱敏）\",\"sunshine_credit\":{\"level\":\"（已脱敏）\"},\"education\":{\"school\":\"（已脱敏）\"},\"birthday\":\"（已脱敏）\",\"created_at\":\"2010-07-16 19:24:01\",\"description\":\"（已脱敏）\",\"gender\":\"f\",\"ip_location\":\"（已脱敏）\",\"hometown\":\"（已脱敏）\",\"real_name\":{\"name\":\"\",\"career\":\"\"},\"label_desc\":[{\"name\":\"昨日阅读数1000+，互动数20\",\"normal_mode\":{\"word_color\":\"#FFFF6200\",\"background_color\":\"#59FFDDCB\"},\"dark_mode\":{\"word_color\":\"#FFEA8011",
+      "capture_resp_head": "{\"data\":{\"sesameCredit\":\"（已脱敏）\",\"career\":{\"company\":\"<REDACTED>\"},\"company\":\"<REDACTED>\",\"sunshine_credit\":{\"level\":\"（已脱敏）\"},\"education\":{\"school\":\"<REDACTED>\"},\"birthday\":\"<REDACTED>\",\"created_at\":\"2010-07-16 19:24:01\",\"description\":\"<REDACTED>\",\"gender\":\"f\",\"ip_location\":\"（已脱敏）\",\"hometown\":\"（已脱敏）\",\"real_name\":{\"name\":\"\",\"career\":\"\"},\"label_desc\":[{\"name\":\"昨日阅读数1000+，互动数20\",\"normal_mode\":{\"word_color\":\"#FFFF6200\",\"background_color\":\"#59FFDDCB\"},\"dark_mode\":{\"word_color\":\"#FFEA8011",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -2673,7 +2673,7 @@
       "method": "GET",
       "mutating": false,
       "sample_params": {
-        "uid": "7904020000"
+        "uid": "<UID_69>"
       },
       "json_structure": {
         "type": "object",
@@ -2703,7 +2703,7 @@
       "method": "GET",
       "mutating": false,
       "sample_params": {
-        "uid": "7904020000"
+        "uid": "<UID_69>"
       },
       "json_structure": {
         "type": "object",
@@ -2977,7 +2977,7 @@
       "path": "/ajax/profile/info",
       "source": "both",
       "real_query": {
-        "uid": "1176110000",
+        "uid": "<UID_9>",
         "scene": "profile"
       },
       "real_post": {},
@@ -2985,7 +2985,7 @@
       "function_desc": "Core profile of `uid` (screen_name, description, stats, verified, avatar). `scene=profile` is the profile-page variant.",
       "capture_count": 5,
       "capture_status": "200",
-      "capture_resp_head": "{\"ok\":1,\"data\":{\"user\":{\"id\":1176110000,\"idstr\":\"1176110000\",\"pc_new\":7,\"screen_name\":\"匿名用户B\",\"profile_image_url\":\"https://tvax1.sinaimg.cn/crop.0.0.650.650.50/anon_avatar_b.jpg?KID=imgbed,tva&Expires=1786209791&ssig=f4SjDQRsMp\",\"profile_url\":\"/u/1176110000\",\"verified\":true,\"verified_type\":0,\"domain\":\"anonb\",\"weihao\":\"\",\"verified_type_ext\":0,\"status_total_counter\":{\"total_cnt_format\":\"（已脱敏）\",\"comment_cnt\":\"（已脱敏）\",\"repost_cnt\":\"（已脱敏）\",\"like_cnt\":\"（已脱敏）\",\"total_cnt\":\"（已脱敏）",
+      "capture_resp_head": "{\"ok\":1,\"data\":{\"user\":{\"id\":\"<UID_9>\",\"idstr\":\"<UID_9>\",\"pc_new\":7,\"screen_name\":\"<NAME_9>\",\"profile_image_url\":\"<REDACTED>\",\"profile_url\":\"/u/<UID_9>\",\"verified\":true,\"verified_type\":0,\"domain\":\"<REDACTED>\",\"weihao\":\"<REDACTED>\",\"verified_type_ext\":0,\"status_total_counter\":{\"total_cnt_format\":\"（已脱敏）\",\"comment_cnt\":\"（已脱敏）\",\"repost_cnt\":\"（已脱敏）\",\"like_cnt\":\"（已脱敏）\",\"total_cnt\":\"（已脱敏）",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -3152,14 +3152,14 @@
       "path": "/ajax/profile/sidedetail",
       "source": "both",
       "real_query": {
-        "uid": "1176110000"
+        "uid": "<UID_9>"
       },
       "real_post": {},
       "function_title": "Profile sidebar detail",
       "function_desc": "Secondary profile panel data shown beside the timeline.",
       "capture_count": 5,
       "capture_status": "200",
-      "capture_resp_head": "{\"data\":{\"service\":[{\"title\":\"微博小店\",\"pic\":\"https://h5.sinaimg.cn/upload/1005/891/2023/01/09/shop.png\",\"button\":{\"text\":\"逛逛\",\"url\":\"https://shop.sc.weibo.com/h5/redirect/dispatcher?containerid=1042092:weibostore_1176110000&extparam=from%3Awbcc_profile_oper\"}},{\"title\":\"优质问答博主\",\"pic\":\"https://h5.sinaimg.cn/upload/1005/891/2019/12/18/wendalogo.jpg\",\"button\":{\"text\":\"提问\",\"url\":\"https://weibo.com/ttwenda/p/publisher3in1?tuid=1176110000#/pay\"}},{\"title\":\"为TA助威\",\"desc\":\"想要点饭~\",\"type\":\"reward\",\"pic\":\"ht",
+      "capture_resp_head": "{\"data\":{\"service\":[{\"title\":\"微博小店\",\"pic\":\"https://h5.sinaimg.cn/upload/1005/891/2023/01/09/shop.png\",\"button\":{\"text\":\"逛逛\",\"url\":\"https://shop.sc.weibo.com/h5/redirect/dispatcher?containerid=1042092:weibostore_<UID_9>&extparam=from%3Awbcc_profile_oper\"}},{\"title\":\"优质问答博主\",\"pic\":\"https://h5.sinaimg.cn/upload/1005/891/2019/12/18/wendalogo.jpg\",\"button\":{\"text\":\"提问\",\"url\":\"https://weibo.com/ttwenda/p/publisher3in1?tuid=<UID_9>#/pay\"}},{\"title\":\"为TA助威\",\"desc\":\"<REDACTED>\",\"type\":\"reward\",\"pic\":\"ht",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -3253,7 +3253,7 @@
       "function_desc": "Weibos of a user filtered by a topic/keyword on the profile page.",
       "capture_count": 1,
       "capture_status": "200",
-      "capture_resp_head": "{\"data\":{\"data\":[{\"title\":\"我经常访问的人(仅自己可见)\",\"list\":[{\"user\":{\"following\":true,\"follow_me\":false,\"id\":1401527553,\"screen_name\":\"tombkeeper\",\"profile_image_url\":\"https://tvax3.sinaimg.cn/crop.0.0.503.503.50/53899d01ly8gy8g2no3naj20dz0dz40e.jpg?KID=imgbed,tva&Expires=1786209762&ssig=pxLu9QG5PI\",\"avatar_large\":\"https://tvax3.sinaimg.cn/crop.0.0.503.503.180/53899d01ly8gy8g2no3naj20dz0dz40e.jpg?KID=imgbed,tva&Expires=1786209762&ssig=B4dXdFTnEO\",\"verified\":true,\"verified_type\":0,\"name\":\"tombkeeper\",\"fol",
+      "capture_resp_head": "{\"data\":{\"data\":[{\"title\":\"我经常访问的人(仅自己可见)\",\"list\":[{\"user\":{\"following\":true,\"follow_me\":false,\"id\":\"<UID_15>\",\"screen_name\":\"<NAME_15>\",\"profile_image_url\":\"<REDACTED>\",\"avatar_large\":\"<REDACTED>\",\"verified\":true,\"verified_type\":0,\"name\":\"<NAME_15>\",\"fol",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -3854,7 +3854,7 @@
       "function_desc": "Right-column widgets (recommended users, groups, ads).",
       "capture_count": 3,
       "capture_status": "200",
-      "capture_resp_head": "{\"ok\":1,\"data\":[{\"card_type\":\"cardHotSearch\",\"cardid\":\"1001_hot_search\",\"display\":true,\"card_item\":[]},{\"card_type\":\"cardInterested\",\"cardid\":\"1001_interested\",\"display\":true},{\"card_type\":\"cardService\",\"cardid\":\"1001_service\",\"display\":true,\"card_item\":[{\"cardid\":\"1001_business_01\",\"name\":\"\",\"desc\":\"\",\"display\":false,\"url\":\"\",\"card_group\":[{\"card_type\":\"SideCard1\",\"title\":\"\"},{\"card_type\":\"SideCard3\",\"items\":[],\"icons\":[],\"button\":{}}]},{\"cardid\":\"1001_business_02\",\"name\":\"评论精选\",\"desc\":\"\",\"disp",
+      "capture_resp_head": "{\"ok\":1,\"data\":[{\"card_type\":\"cardHotSearch\",\"cardid\":\"1001_hot_search\",\"display\":true,\"card_item\":[]},{\"card_type\":\"cardInterested\",\"cardid\":\"1001_interested\",\"display\":true},{\"card_type\":\"cardService\",\"cardid\":\"1001_service\",\"display\":true,\"card_item\":[{\"cardid\":\"1001_business_01\",\"name\":\"\",\"desc\":\"<REDACTED>\",\"display\":false,\"url\":\"\",\"card_group\":[{\"card_type\":\"SideCard1\",\"title\":\"\"},{\"card_type\":\"SideCard3\",\"items\":[],\"icons\":[],\"button\":{}}]},{\"cardid\":\"1001_business_02\",\"name\":\"评论精选\",\"desc\":\"<REDACTED>\",\"disp",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -3926,7 +3926,7 @@
       "function_desc": "Right-column widgets (recommended users, groups, ads).",
       "capture_count": 7,
       "capture_status": "200",
-      "capture_resp_head": "{\"ok\":1,\"data\":{\"uid\":1176110000,\"since_id\":\"1786199065|3\",\"users\":[{\"user\":{\"id\":1644101945,\"idstr\":\"1644101945\",\"screen_name\":\"猫叔在硅谷\",\"description\":\"无趣乏味的中年胖子。 若失联，@猫叔在加州\",\"gender\":\"m\",\"profile_image_url\":\"https://tvax2.sinaimg.cn/crop.0.0.1080.1080.50/61ff0139ly8i9dce8g745j20u00u0q4o.jpg?KID=imgbed,tva&Expires=1786209865&ssig=f%2B4dWqQIwn\",\"avatar_large\":\"https://tvax2.sinaimg.cn/crop.0.0.1080.1080.180/61ff0139ly8i9dce8g745j20u00u0q4o.jpg?KID=imgbed,tva&Expires=1786209865&ssig=i%2BybVFaYCd\",\"",
+      "capture_resp_head": "{\"ok\":1,\"data\":{\"uid\":\"<UID_9>\",\"since_id\":\"1786199065|3\",\"users\":[{\"user\":{\"id\":\"<UID_16>\",\"idstr\":\"<UID_16>\",\"screen_name\":\"<NAME_16>\",\"description\":\"<REDACTED>\",\"gender\":\"m\",\"profile_image_url\":\"<REDACTED>\",\"avatar_large\":\"<REDACTED>\",\"",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -3939,7 +3939,7 @@
       "method": "GET",
       "mutating": false,
       "sample_params": {
-        "uid": "7904020000"
+        "uid": "<UID_69>"
       },
       "json_structure": {
         "type": "object",
@@ -4427,7 +4427,7 @@
       "method": "GET",
       "mutating": false,
       "sample_params": {
-        "uid": "7904020000"
+        "uid": "<UID_69>"
       },
       "json_structure": {
         "type": "object",
@@ -4511,7 +4511,7 @@
       "method": "GET",
       "mutating": false,
       "sample_params": {
-        "uid": "7904020000"
+        "uid": "<UID_69>"
       },
       "json_structure": {
         "type": "object",
@@ -4622,7 +4622,7 @@
       "path": "/ajax/statuses/likelist",
       "source": "both",
       "real_query": {
-        "uid": "1176110000",
+        "uid": "<UID_9>",
         "page": "1",
         "with_total": "true"
       },
@@ -4631,7 +4631,7 @@
       "function_desc": "Users who liked a given weibo (`id`). Returns `data[]` of users.",
       "capture_count": 1,
       "capture_status": "200",
-      "capture_resp_head": "{\"ok\":1,\"data\":{\"list\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Wed Aug 05 21:48:24 +0800 2026\",\"id\":5328671305107846,\"idstr\":\"5328671305107846\",\"mid\":\"5328671305107846\",\"mblogid\":\"Rc1S2lqMC\",\"user\":{\"id\":1463212167,\"idstr\":\"1463212167\",\"pc_new\":7,\"screen_name\":\"RevengeRangers\",\"profile_image_url\":\"https://tvax2.sinaimg.cn/crop.0.0.1080.1080.50/5736d887ly8h15afn7dzrj20u00u0wiv.jpg?KID=imgbed,tva&Expires=1786209785&ssig=Wkof9coCZ4\",\"profile_url\":\"/u/1463212167\",\"verified\":true,\"verified_t",
+      "capture_resp_head": "{\"ok\":1,\"data\":{\"list\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Wed Aug 05 21:48:24 +0800 2026\",\"id\":\"<UID_18>\",\"idstr\":\"<UID_18>\",\"mid\":\"<UID_18>\",\"mblogid\":\"Rc1S2lqMC\",\"user\":{\"id\":\"<UID_17>\",\"idstr\":\"<UID_17>\",\"pc_new\":7,\"screen_name\":\"<NAME_17>\",\"profile_image_url\":\"<REDACTED>\",\"profile_url\":\"/u/<UID_17>\",\"verified\":true,\"verified_t",
       "live_status": "exists_param_needed",
       "live_http_status": 400,
       "live_available": false
@@ -4749,7 +4749,7 @@
       "path": "/ajax/statuses/mymblog",
       "source": "both",
       "real_query": {
-        "uid": "1176110000",
+        "uid": "<UID_9>",
         "page": "1",
         "feature": "0"
       },
@@ -4758,7 +4758,7 @@
       "function_desc": "Paginated list of a user's own posts. `uid` target, `page`, `feature` (0=all, 1=original, ...). Returns `weibo_items[]`.",
       "capture_count": 3,
       "capture_status": "200",
-      "capture_resp_head": "{\"data\":{\"since_id\":5325718105887237,\"list\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Fri Mar 27 16:37:31 +0800 2026\",\"id\":5281120260198165,\"idstr\":\"5281120260198165\",\"mid\":\"5281120260198165\",\"mblogid\":\"Qy2j80Pyd\",\"user\":{\"id\":1176110000,\"idstr\":\"1176110000\",\"pc_new\":7,\"screen_name\":\"匿名用户B\",\"profile_image_url\":\"https://tvax1.sinaimg.cn/crop.0.0.650.650.50/anon_avatar_b.jpg?KID=imgbed,tva&Expires=1786209791&ssig=f4SjDQRsMp\",\"profile_url\":\"/u/1176110000\",\"verified\":true,\"ve",
+      "capture_resp_head": "{\"data\":{\"since_id\":5325718105887237,\"list\":[{\"visible\":{\"type\":0,\"list_id\":0},\"created_at\":\"Fri Mar 27 16:37:31 +0800 2026\",\"id\":\"<UID_19>\",\"idstr\":\"<UID_19>\",\"mid\":\"<UID_19>\",\"mblogid\":\"Qy2j80Pyd\",\"user\":{\"id\":\"<UID_9>\",\"idstr\":\"<UID_9>\",\"pc_new\":7,\"screen_name\":\"<NAME_9>\",\"profile_image_url\":\"<REDACTED>\",\"profile_url\":\"/u/<UID_9>\",\"verified\":true,\"ve",
       "live_status": "ok",
       "live_http_status": 200,
       "live_available": true
@@ -5174,7 +5174,7 @@
       "method": "GET",
       "mutating": false,
       "sample_params": {
-        "uid": "7904020000",
+        "uid": "<UID_69>",
         "count": 10
       },
       "json_structure": {
@@ -5186,7 +5186,7 @@
         ],
         "sample": {
           "result": "<dict>",
-          "uid": 7904020000,
+          "uid": "<UID_69>",
           "ok": 1
         }
       },
@@ -5340,7 +5340,7 @@
       "method": "GET",
       "mutating": false,
       "sample_params": {
-        "uid": "7904020000"
+        "uid": "<UID_69>"
       },
       "json_structure": {
         "type": "object",
@@ -5631,7 +5631,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json; charset=utf-8",
-      "resp_head": "{\"data\":{\"5329766236291766\":{\"act\":\"PC_real_read\",\"itemid\":\"5329766236291766\",\"type\":\"mblog\",\"rid\":\"0_0_200_5064827822898964429_0_0_0\",\"page\":\"\",\"root_id\":\"5329760450517937\",\"uicode\":20000390,\"groupid\":20000390,\"fid\":232150,\"analysis_extra\":\"currentUid:1176110000|statusAuthorId:6419748247|isFollow:1|special_follow:1|mblog_rt_mid:5329760450517937\",\"ext\":\"module:03\",\"PC_real_read\":1,\"__date\":1786199248,\"duration\":14998,\"read_duration\":14998,\"uid\":\"1176110000\"},\"5329760450517937\":{\"act\":\"PC_real_re",
+      "resp_head": "{\"data\":{\"<UID_11>\":{\"act\":\"PC_real_read\",\"itemid\":\"<UID_11>\",\"type\":\"mblog\",\"rid\":\"0_0_200_5064827822898964429_0_0_0\",\"page\":\"\",\"root_id\":\"5329760450517937\",\"uicode\":20000390,\"groupid\":20000390,\"fid\":232150,\"analysis_extra\":\"currentUid:<UID_9>|statusAuthorId:<UID_10>|isFollow:1|special_follow:1|mblog_rt_mid:5329760450517937\",\"ext\":\"module:03\",\"PC_real_read\":1,\"__date\":1786199248,\"duration\":14998,\"read_duration\":14998,\"uid\":\"<UID_9>\"},\"5329760450517937\":{\"act\":\"PC_real_re",
       "category": "log",
       "mutating": false,
       "function_title": "Read-state log",
@@ -5693,7 +5693,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json; charset=utf-8",
-      "resp_head": "{\"data\":{\"screen_name\":\"匿名用户B\",\"description\":\"（已脱敏）\",\"domain\":\"anonb\",\"gender\":\"f\",\"birthday\":\"（已脱敏）\",\"birthday_visible\":3,\"province\":\"32\",\"city\":\"1000\",\"hometown_province\":\"34\",\"hometown_city\":\"5\",\"single\":\"2\",\"eduction\":[{\"area\":0,\"city\":0,\"department\":\"计算机应用技术\",\"department_id\":0,\"end_year\":0,\"id\":114386569,\"isVerified\":\"1\",\"province\":32,\"school\":\"（已脱敏）\",\"school_id\":244454,\"type\":1,\"visible\":2,\"year\":2013},{\"area\":0,\"city\":0,\"department\":\"计算机\",\"department_id\":0,\"end_",
+      "resp_head": "{\"data\":{\"screen_name\":\"<NAME_9>\",\"description\":\"<REDACTED>\",\"domain\":\"<REDACTED>\",\"gender\":\"f\",\"birthday\":\"<REDACTED>\",\"birthday_visible\":3,\"province\":\"32\",\"city\":\"1000\",\"hometown_province\":\"34\",\"hometown_city\":\"5\",\"single\":\"2\",\"eduction\":[{\"area\":0,\"city\":0,\"department\":\"计算机应用技术\",\"department_id\":0,\"end_year\":0,\"id\":\"<UID_20>\",\"isVerified\":\"1\",\"province\":32,\"school\":\"<REDACTED>\",\"school_id\":244454,\"type\":1,\"visible\":2,\"year\":2013},{\"area\":0,\"city\":0,\"department\":\"计算机\",\"department_id\":0,\"end_",
       "category": "setting",
       "mutating": false,
       "function_title": "Basic info settings",
@@ -5715,7 +5715,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json; charset=utf-8",
-      "resp_head": "{\"uid\":1176110000,\"card_group\":[{\"card_type\":8,\"scheme\":\"sinaweibo://shieldoption?type=1&status=1&interact=1&follow=1&uid=7669161199\",\"pic\":\"https://tvax4.sinaimg.cn/crop.0.0.1080.1080.180/008n11anly8i25en76ipfj30u00u0js5.jpg?KID=imgbed,tva&Expires=1786209849&ssig=%2FkvVtuEPqh\",\"title_sub\":\"沫沫的日常_\",\"desc1\":\"微博 互动 关注 \",\"itemid\":\"34008dd6-554a-4d8e-9caa-7413d3d1d82e\"},{\"card_type\":8,\"scheme\":\"sinaweibo://shieldoption?type=1&status=1&interact=1&follow=1&uid=6301920421\",\"pic\":\"https://tvax2.sinaimg.",
+      "resp_head": "{\"uid\":\"<UID_9>\",\"card_group\":[{\"card_type\":8,\"scheme\":\"sinaweibo://shieldoption?type=1&status=1&interact=1&follow=1&uid=<UID_21>\",\"pic\":\"https://tvax4.sinaimg.cn/crop.0.0.1080.1080.180/008n11anly8i25en76ipfj30u00u0js5.jpg?KID=imgbed,tva&Expires=1786209849&ssig=%2FkvVtuEPqh\",\"title_sub\":\"<REDACTED>\",\"desc1\":\"<REDACTED>\",\"itemid\":\"34008dd6-554a-4d8e-9caa-7413d3d1d82e\"},{\"card_type\":8,\"scheme\":\"sinaweibo://shieldoption?type=1&status=1&interact=1&follow=1&uid=<UID_22>\",\"pic\":\"https://tvax2.sinaimg.",
       "category": "setting",
       "mutating": false,
       "function_title": "Filtered (muted) users",
@@ -5807,7 +5807,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"public_messge_remind_tab\":0,\"previous_cursor\":0,\"totalNumber\":834,\"is_block_all_public\":0,\"next_cursor\":30,\"backup_service\":0,\"show_clear_trash_button\":1,\"receive_public_all\":0,\"contacts\":[{\"unread_count\":31,\"message\":{\"idstr\":\"5329767088792454\",\"faith_status\":1,\"created_at\":\"Sat Aug 08 22:22:39 +0800 2026\",\"mid\":\"5329767088792454\",\"sys_type\":0,\"source\":\"<a href=\\\"http://app.weibo.com/t/feed/55p5y5\\\" rel=\\\"nofollow\\\">push-processor</a>\",\"oriImageId\":0,\"sender_id\":1783759893,\"dm_type\":6,\"folder",
+      "resp_head": "{\"public_messge_remind_tab\":0,\"previous_cursor\":0,\"totalNumber\":834,\"is_block_all_public\":0,\"next_cursor\":30,\"backup_service\":0,\"show_clear_trash_button\":1,\"receive_public_all\":0,\"contacts\":[{\"unread_count\":31,\"message\":{\"idstr\":\"<UID_23>\",\"faith_status\":1,\"created_at\":\"Sat Aug 08 22:22:39 +0800 2026\",\"mid\":\"<UID_23>\",\"sys_type\":0,\"source\":\"<a href=\\\"http://app.weibo.com/t/feed/55p5y5\\\" rel=\\\"nofollow\\\">push-processor</a>\",\"oriImageId\":0,\"sender_id\":\"<UID_24>\",\"dm_type\":6,\"folder",
       "category": "other",
       "mutating": false,
       "function_title": "DM contact list",
@@ -5871,7 +5871,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json; charset=utf-8",
-      "resp_head": "{\"ok\":1,\"curTab\":\"mine\",\"tabs\":[{\"name\":\"我的\",\"key\":\"mine\"},{\"name\":\"热搜\",\"key\":\"hot\"}],\"data\":{\"realtime\":[{\"word\":\"峰哥实名举报汪海林偷税漏税\",\"word_scheme\":\"#峰哥实名举报汪海林偷税漏税#\",\"rank\":0,\"topic_flag\":1,\"description\":\"16:06登顶\"},{\"word\":\"女孩遭性侵被不雅视频威胁多次轻生\",\"word_scheme\":\"女孩遭性侵被不雅视频威胁多次轻生\",\"rank\":1,\"topic_flag\":0,\"description\":\"好友正在看\"},{\"word\":\"刘旸秒删\",\"word_scheme\":\"#刘旸秒删#\",\"rank\":2,\"topic_flag\":1,\"description\":68182},{\"word\":\"Marshall携二手玫瑰守住现场\",\"icon_url\":\"https://simg.s.weibo.com/imgtool/20241104_20241104_huore_ic",
+      "resp_head": "{\"ok\":1,\"curTab\":\"mine\",\"tabs\":[{\"name\":\"我的\",\"key\":\"mine\"},{\"name\":\"热搜\",\"key\":\"hot\"}],\"data\":{\"realtime\":[{\"word\":\"<REDACTED>\",\"word_scheme\":\"<REDACTED>\",\"rank\":0,\"topic_flag\":1,\"description\":\"<REDACTED>\"},{\"word\":\"<REDACTED>\",\"word_scheme\":\"<REDACTED>\",\"rank\":1,\"topic_flag\":0,\"description\":\"<REDACTED>\"},{\"word\":\"<REDACTED>\",\"word_scheme\":\"<REDACTED>\",\"rank\":2,\"topic_flag\":1,\"description\":68182},{\"word\":\"<REDACTED>\",\"icon_url\":\"https://simg.s.weibo.com/imgtool/20241104_20241104_huore_ic",
       "category": "sidebar",
       "mutating": false,
       "function_title": "Unified band",
@@ -5931,7 +5931,7 @@
       "host": "web.im.weibo.com",
       "method": "GET",
       "path": "/im/",
-      "url": "https://web.im.weibo.com/im/?jsonp=_cometd_jsonp_27&message=%5B%7B%22id%22%3A%2230%22%2C%22channel%22%3A%22%2Fmeta%2Fsubscribe%22%2C%22subscription%22%3A%22%2Fim%2F1176110000%22%2C%22clientId%22%3A%224dwql1xx6oqjud6arr1lh7ek4il5171%22%7D%5D",
+      "url": "https://web.im.weibo.com/im/?jsonp=_cometd_jsonp_27&message=%5B%7B%22id%22%3A%2230%22%2C%22channel%22%3A%22%2Fmeta%2Fsubscribe%22%2C%22subscription%22%3A%22%2Fim%2F<UID_9>%22%2C%22clientId%22%3A%224dwql1xx6oqjud6arr1lh7ek4il5171%22%7D%5D",
       "count": 2,
       "query": {
         "jsonp": "_cometd_jsonp_27",
@@ -5940,7 +5940,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=utf-8",
-      "resp_head": "try{_cometd_jsonp_27([{\"channel\":\"/meta/subscribe\",\"id\":\"30\",\"subscription\":\"/im/1176110000\",\"successful\":true}])}catch(e){}",
+      "resp_head": "try{_cometd_jsonp_27([{\"channel\":\"/meta/subscribe\",\"id\":\"30\",\"subscription\":\"/im/<UID_9>\",\"successful\":true}])}catch(e){}",
       "category": "other",
       "mutating": false,
       "function_title": "Bayeux endpoint (generic)",
@@ -5985,7 +5985,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json; charset=utf-8",
-      "resp_head": "{\"code\":\"100000\",\"data\":{\"list\":[{\"final_pos\":1,\"description\":\"\\u597d\\u53cb\\u6b63\\u5728\\u770b\",\"query\":\"\\u5973\\u5b69\\u906d\\u6027\\u4fb5\\u88ab\\u4e0d\\u96c5\\u89c6\\u9891\\u5a01\\u80c1\\u591a\\u6b21\\u8f7b\\u751f\",\"topic_flag\":0,\"flag\":0,\"word_scheme\":\"\\u5973\\u5b69\\u906d\\u6027\\u4fb5\\u88ab\\u4e0d\\u96c5\\u89c6\\u9891\\u5a01\\u80c1\\u591a\\u6b21\\u8f7b\\u751f\",\"note\":\"\\u5973\\u5b69\\u906d\\u6027\\u4fb5\\u88ab\\u4e0d\\u96c5\\u89c6\\u9891\\u5a01\\u80c1\\u591a\\u6b21\\u8f7b\\u751f\",\"word\":\"\\u5973\\u5b69\\u906d\\u6027\\u4fb5\\u88ab\\u4e0d\\u96c",
+      "resp_head": "{\"code\":\"100000\",\"data\":{\"list\":[{\"final_pos\":1,\"description\":\"<REDACTED>\",\"query\":\"\\u5973\\u5b69\\u906d\\u6027\\u4fb5\\u88ab\\u4e0d\\u96c5\\u89c6\\u9891\\u5a01\\u80c1\\u591a\\u6b21\\u8f7b\\u751f\",\"topic_flag\":0,\"flag\":0,\"word_scheme\":\"<REDACTED>\",\"note\":\"\\u5973\\u5b69\\u906d\\u6027\\u4fb5\\u88ab\\u4e0d\\u96c5\\u89c6\\u9891\\u5a01\\u80c1\\u591a\\u6b21\\u8f7b\\u751f\",\"word\":\"\\u5973\\u5b69\\u906d\\u6027\\u4fb5\\u88ab\\u4e0d\\u96c",
       "category": "other",
       "mutating": false,
       "function_title": "Home index \"band\" recommendations",
@@ -5999,10 +5999,10 @@
       "host": "s.weibo.com",
       "method": "GET",
       "path": "/aisearch",
-      "url": "https://s.weibo.com/aisearch?q=%23%E5%88%98%E6%97%B8%E7%A7%92%E5%88%A0%23&Refer=weibo_aisearch",
+      "url": "https://s.weibo.com/aisearch?q=<REDACTED>&Refer=weibo_aisearch",
       "count": 2,
       "query": {
-        "q": "#刘旸秒删#",
+        "q": "<REDACTED>",
         "Refer": "weibo_aisearch"
       },
       "post": {},
@@ -6022,10 +6022,10 @@
       "host": "s.weibo.com",
       "method": "GET",
       "path": "/weibo",
-      "url": "https://s.weibo.com/weibo?q=%23%E5%88%98%E6%97%B8%E7%A7%92%E5%88%A0%23&topic_ad=&t=547",
+      "url": "https://s.weibo.com/weibo?q=<REDACTED>&topic_ad=&t=547",
       "count": 2,
       "query": {
-        "q": "#刘旸秒删#",
+        "q": "<REDACTED>",
         "t": "547"
       },
       "post": {},
@@ -6069,13 +6069,13 @@
       "host": "api.weibo.com",
       "method": "GET",
       "path": "/webim/groupchat/query_messages.json",
-      "url": "https://api.weibo.com/webim/groupchat/query_messages.json?convert_emoji=1&query_sender=1&count=20&id=4761715839862414&max_mid=5329755270024606&source=209678993&t=1786198543495",
+      "url": "https://api.weibo.com/webim/groupchat/query_messages.json?convert_emoji=1&query_sender=1&count=20&id=<UID_40>&max_mid=5329755270024606&source=209678993&t=1786198543495",
       "count": 2,
       "query": {
         "convert_emoji": "1",
         "query_sender": "1",
         "count": "20",
-        "id": "4761715839862414",
+        "id": "<UID_40>",
         "max_mid": "5329755270024606",
         "source": "209678993",
         "t": "1786198543495"
@@ -6083,7 +6083,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"result\":true,\"last_read_mid\":5329764533406949,\"messages\":[{\"is_important\":0,\"mblogid\":\"1000\",\"gid\":4761715839862414,\"faith_status\":2,\"annotations\":{\"send_from\":\"manual\",\"client_from\":\"10G7493010\",\"smart_search\":{\"topic_id\":\"0\"},\"push_proc_ext\":{\"send_time\":1786195664682,\"prepare_time\":10,\"msg_ext\":\"{}\"},\"spr\":\"from:10G7493010;wm:3333_2001\",\"gdid\":\"1D069DE2F5E54DeB77DEB119\",\"include_video\":0,\"aid\":\"01AwdHEAcXYhpU6olYlKsT1YARLoYm4KlmTj9T2TfEBxpHl7Y.\"},\"type\":321,\"from_uid\":7211036377,\"content\":\"",
+      "resp_head": "{\"result\":true,\"last_read_mid\":5329764533406949,\"messages\":[{\"is_important\":0,\"mblogid\":\"1000\",\"gid\":\"<UID_40>\",\"faith_status\":2,\"annotations\":{\"send_from\":\"manual\",\"client_from\":\"10G7493010\",\"smart_search\":{\"topic_id\":\"0\"},\"push_proc_ext\":{\"send_time\":1786195664682,\"prepare_time\":10,\"msg_ext\":\"{}\"},\"spr\":\"from:10G7493010;wm:3333_2001\",\"gdid\":\"1D069DE2F5E54DeB77DEB119\",\"include_video\":0,\"aid\":\"01AwdHEAcXYhpU6olYlKsT1YARLoYm4KlmTj9T2TfEBxpHl7Y.\"},\"type\":321,\"from_uid\":\"<UID_25>\",\"content\":\"",
       "category": "other",
       "mutating": false,
       "function_title": "Group-chat message history",
@@ -6097,17 +6097,17 @@
       "host": "api.weibo.com",
       "method": "GET",
       "path": "/webim/2/users/show.json",
-      "url": "https://api.weibo.com/webim/2/users/show.json?uid=1401527553&source=209678993&t=1786198448534",
+      "url": "https://api.weibo.com/webim/2/users/show.json?uid=<UID_15>&source=209678993&t=1786198448534",
       "count": 1,
       "query": {
-        "uid": "1401527553",
+        "uid": "<UID_15>",
         "source": "209678993",
         "t": "1786198448534"
       },
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"screen_name\":\"tombkeeper\",\"id\":1401527553,\"profile_url\":\"101174\",\"avatar_large\":\"https://tvax3.sinaimg.cn/crop.0.0.503.503.180/53899d01ly8gy8g2no3naj20dz0dz40e.jpg?KID=imgbed,tva&Expires=1786209249&ssig=rkpp%2F8HJJT\",\"verified_type\":0,\"verified_type_ext\":1,\"name\":\"tombkeeper\",\"description\":\"汉语从句专家，茧房建筑师\",\"remark\":\"于旸\",\"verified\":true,\"profile_image_url\":\"https://tvax3.sinaimg.cn/crop.0.0.503.503.50/53899d01ly8gy8g2no3naj20dz0dz40e.jpg?KID=imgbed,tva&Expires=1786209249&ssig=qg4HNpHvoi\"}",
+      "resp_head": "{\"screen_name\":\"<NAME_15>\",\"id\":\"<UID_15>\",\"profile_url\":\"<REDACTED>\",\"avatar_large\":\"<REDACTED>\",\"verified_type\":0,\"verified_type_ext\":1,\"name\":\"<NAME_15>\",\"description\":\"<REDACTED>\",\"remark\":\"<REDACTED>\",\"verified\":true,\"profile_image_url\":\"<REDACTED>\"}",
       "category": "other",
       "mutating": false,
       "function_title": "IM user card",
@@ -6121,17 +6121,17 @@
       "host": "api.weibo.com",
       "method": "GET",
       "path": "/webim/groupchat/query_nick.json",
-      "url": "https://api.weibo.com/webim/groupchat/query_nick.json?gid=4761715839862414&source=209678993&t=1786198448471",
+      "url": "https://api.weibo.com/webim/groupchat/query_nick.json?gid=<UID_40>&source=209678993&t=1786198448471",
       "count": 1,
       "query": {
-        "gid": "4761715839862414",
+        "gid": "<UID_40>",
         "source": "209678993",
         "t": "1786198448471"
       },
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"nick_infos\":[{\"uid\":7818666247,\"nick\":\"正向情绪电瓶车\"},{\"uid\":1844246511,\"nick\":\"龙彪\"},{\"uid\":2405861474,\"nick\":\"顶级鱼卵\"},{\"uid\":5369991446,\"nick\":\"角度\"},{\"uid\":1875247041,\"nick\":\"河马\"},{\"uid\":2191122844,\"nick\":\"引力波\"},{\"uid\":1958655673,\"nick\":\"我爱吃肠FF粉001\"},{\"uid\":1935953251,\"nick\":\"cuteify\"},{\"uid\":5075300234,\"nick\":\"打开窗户说亮话\"},{\"uid\":1899988273,\"nick\":\"圆咕咕胖乎乎\"},{\"uid\":3893681927,\"nick\":\"freemg123\"},{\"uid\":6175706380,\"nick\":\"小熊猫中年事件簿\"},{\"uid\":6193968426,\"nick\":\"二狗\"},{\"uid\":2170460227,\"nick\":\"冰可乐\"},{\"uid\":",
+      "resp_head": "{\"nick_infos\":[{\"uid\":\"<UID_26>\",\"nick\":\"<NAME_26>\"},{\"uid\":\"<UID_27>\",\"nick\":\"<NAME_27>\"},{\"uid\":\"<UID_28>\",\"nick\":\"<NAME_28>\"},{\"uid\":\"<UID_29>\",\"nick\":\"<NAME_29>\"},{\"uid\":\"<UID_30>\",\"nick\":\"<NAME_30>\"},{\"uid\":\"<UID_31>\",\"nick\":\"<NAME_31>\"},{\"uid\":\"<UID_32>\",\"nick\":\"<NAME_32>\"},{\"uid\":\"<UID_33>\",\"nick\":\"<NAME_33>\"},{\"uid\":\"<UID_34>\",\"nick\":\"<NAME_34>\"},{\"uid\":\"<UID_35>\",\"nick\":\"<NAME_35>\"},{\"uid\":\"<UID_36>\",\"nick\":\"<NAME_36>\"},{\"uid\":\"<UID_37>\",\"nick\":\"<NAME_37>\"},{\"uid\":\"<UID_38>\",\"nick\":\"<NAME_38>\"},{\"uid\":\"<UID_39>\",\"nick\":\"<NAME_39>\"},{\"uid\":",
       "category": "other",
       "mutating": false,
       "function_title": "Group member nickname",
@@ -6145,21 +6145,21 @@
       "host": "api.weibo.com",
       "method": "GET",
       "path": "/webim/query_group.json",
-      "url": "https://api.weibo.com/webim/query_group.json?is_pc=1&query_member=1&sort_by_jp=1&query_member_count=5000&id=4761715839862414&source=209678993&t=1786198448404",
+      "url": "https://api.weibo.com/webim/query_group.json?is_pc=1&query_member=1&sort_by_jp=1&query_member_count=5000&id=<UID_40>&source=209678993&t=1786198448404",
       "count": 1,
       "query": {
         "is_pc": "1",
         "query_member": "1",
         "sort_by_jp": "1",
         "query_member_count": "5000",
-        "id": "4761715839862414",
+        "id": "<UID_40>",
         "source": "209678993",
         "t": "1786198448404"
       },
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"addsession\":0,\"avatar_s\":\"https://wx1.sinaimg.cn/wap50/53899d01ly8i4bm03nt0bj2050050q3y.jpg\",\"group_type\":3,\"affi_type\":[1],\"remain_at_count\":0,\"group_url\":\"https://weibo.com/p/2304914761715839862414\",\"group_ts\":1786154376986,\"affiliation\":[1401527553],\"members\":[1811499354,2359197062,5588426181,2386553861,1760546237,7464688652,3220290302,7939282062,6116385184,5474879265,2634502773,2324554930,1697854650,1464944137,5127889980,6587933735,1649534045,8342964635,9083355530,6538045412],\"id\":47617158",
+      "resp_head": "{\"addsession\":0,\"avatar_s\":\"<REDACTED>\",\"group_type\":3,\"affi_type\":[1],\"remain_at_count\":0,\"group_url\":\"https://weibo.com/p/<UID_40>\",\"group_ts\":1786154376986,\"affiliation\":[\"<UID_15>\"],\"members\":[\"<UID_41>\",\"<UID_42>\",\"<UID_43>\",\"<UID_44>\",\"<UID_45>\",\"<UID_46>\",\"<UID_47>\",\"<UID_48>\",\"<UID_49>\",\"<UID_50>\",\"<UID_51>\",\"<UID_52>\",\"<UID_53>\",\"<UID_54>\",\"<UID_55>\",\"<UID_56>\",\"<UID_57>\",\"<UID_58>\",\"<UID_59>\",\"<UID_60>\"],\"id\":<UID_40>",
       "category": "other",
       "mutating": false,
       "function_title": "Group chat info",
@@ -6173,10 +6173,10 @@
       "host": "api.weibo.com",
       "method": "GET",
       "path": "/webim/groupchat/query_sync_groups.json",
-      "url": "https://api.weibo.com/webim/groupchat/query_sync_groups.json?gid=4761715839862414&source=209678993&t=1786198448404",
+      "url": "https://api.weibo.com/webim/groupchat/query_sync_groups.json?gid=<UID_40>&source=209678993&t=1786198448404",
       "count": 1,
       "query": {
-        "gid": "4761715839862414",
+        "gid": "<UID_40>",
         "source": "209678993",
         "t": "1786198448404"
       },
@@ -6197,11 +6197,11 @@
       "host": "api.weibo.com",
       "method": "GET",
       "path": "/webim/api/v1/private-letter-page/check-auth",
-      "url": "https://api.weibo.com/webim/api/v1/private-letter-page/check-auth?createUid=1176110000&talkUid=4761715839862414",
+      "url": "https://api.weibo.com/webim/api/v1/private-letter-page/check-auth?createUid=<UID_9>&talkUid=<UID_40>",
       "count": 2,
       "query": {
-        "createUid": "1176110000",
-        "talkUid": "4761715839862414"
+        "createUid": "<UID_9>",
+        "talkUid": "<UID_40>"
       },
       "post": {},
       "capture_status": "200",
@@ -6230,7 +6230,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"result\":true,\"settings\":{\"status_mention_push_state_outer_push\":2,\"sa_no_delay\":2,\"in_like\":2,\"like\":2,\"public_message\":1,\"at_me\":3,\"dm\":2,\"in_new_fans\":2,\"new_fans\":3,\"friends\":2,\"chat_group_notify\":2,\"floating_window\":2,\"uid\":1176110000,\"flow_message\":3,\"page_group\":2,\"comment_push_state_outer_push\":2,\"phone\":2,\"friend_follow_notification\":2,\"comment\":3,\"groupchat_notify_receive\":2,\"sp_attention\":2}}",
+      "resp_head": "{\"result\":true,\"settings\":{\"status_mention_push_state_outer_push\":2,\"sa_no_delay\":2,\"in_like\":2,\"like\":2,\"public_message\":1,\"at_me\":3,\"dm\":2,\"in_new_fans\":2,\"new_fans\":3,\"friends\":2,\"chat_group_notify\":2,\"floating_window\":2,\"uid\":\"<UID_9>\",\"flow_message\":3,\"page_group\":2,\"comment_push_state_outer_push\":2,\"phone\":2,\"friend_follow_notification\":2,\"comment\":3,\"groupchat_notify_receive\":2,\"sp_attention\":2}}",
       "category": "other",
       "mutating": false,
       "function_title": "Push notification settings",
@@ -6253,7 +6253,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"vuser\":{\"page_id\":1176110000,\"fangroup_count\":5,\"create_aff_count\":7},\"result\":true,\"ts\":1786198448}",
+      "resp_head": "{\"vuser\":{\"page_id\":\"<UID_9>\",\"fangroup_count\":5,\"create_aff_count\":7},\"result\":true,\"ts\":1786198448}",
       "category": "other",
       "mutating": false,
       "function_title": "Fan-group ability",
@@ -6322,7 +6322,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"remarks\":[{\"uid\":2128936940,\"remark\":\"巫康\",\"jp\":\"wk\",\"qp\":\"wukang\"},{\"uid\":1707668935,\"remark\":\"谢颖颖\",\"jp\":\"xyy\",\"qp\":\"xieyingying\"},{\"uid\":2149946154,\"remark\":\"王明妮\",\"jp\":\"wmn\",\"qp\":\"wangmingni\"},{\"uid\":1750437703,\"remark\":\"周毓琪\",\"jp\":\"zyq\",\"qp\":\"zhouyuqi\"},{\"uid\":1825269720,\"remark\":\"李士新\",\"jp\":\"lsx\",\"qp\":\"lishixin\"},{\"uid\":3874589158,\"remark\":\"张明清\",\"jp\":\"zmq\",\"qp\":\"zhangmingqing\"},{\"uid\":5881655691,\"remark\":\"殷医静\",\"jp\":\"yyj\",\"qp\":\"yinyijing\"},{\"uid\":1899123755,\"remark\":\"何婧誉\",\"jp\":\"hjy\",\"qp\":\"heji",
+      "resp_head": "{\"remarks\":[{\"uid\":\"<UID_61>\",\"remark\":\"<REDACTED>\",\"jp\":\"wk\",\"qp\":\"wukang\"},{\"uid\":\"<UID_62>\",\"remark\":\"<REDACTED>\",\"jp\":\"xyy\",\"qp\":\"xieyingying\"},{\"uid\":\"<UID_63>\",\"remark\":\"<REDACTED>\",\"jp\":\"wmn\",\"qp\":\"wangmingni\"},{\"uid\":\"<UID_64>\",\"remark\":\"<REDACTED>\",\"jp\":\"zyq\",\"qp\":\"zhouyuqi\"},{\"uid\":\"<UID_65>\",\"remark\":\"<REDACTED>\",\"jp\":\"lsx\",\"qp\":\"lishixin\"},{\"uid\":\"<UID_66>\",\"remark\":\"<REDACTED>\",\"jp\":\"zmq\",\"qp\":\"zhangmingqing\"},{\"uid\":\"<UID_67>\",\"remark\":\"<REDACTED>\",\"jp\":\"yyj\",\"qp\":\"yinyijing\"},{\"uid\":\"<UID_68>\",\"remark\":\"<REDACTED>\",\"jp\":\"hjy\",\"qp\":\"heji",
       "category": "other",
       "mutating": false,
       "function_title": "Friend remarks / aliases",
@@ -6368,7 +6368,7 @@
       "post": {},
       "capture_status": "200",
       "content_type": "application/json;charset=UTF-8",
-      "resp_head": "{\"profile\":{\"birthday\":\"（已脱敏）\",\"completion_level\":100,\"gender\":\"f\",\"hometown_province\":34,\"city\":1000,\"created_at\":\"2010-07-16 19:24:01\",\"description\":\"（已脱敏）\",\"msn\":\"\",\"default_avatar\":0,\"real_name\":\"（已脱敏）\",\"gender_state\":1,\"qq_visible\":0,\"email_visible\":1,\"province\":32,\"screen_name\":\"匿名用户B\",\"real_name_visible\":0,\"url_visible\":2,\"hometown_city\":5,\"id\":1176110000,\"lang\":\"zh-cn\",\"msn_visible\":1,\"profileImageUrl\":\"https://tvax1.sinaimg.cn/crop.0.0.650.650.50/anon_avatar_b",
+      "resp_head": "{\"profile\":{\"birthday\":\"<REDACTED>\",\"completion_level\":100,\"gender\":\"f\",\"hometown_province\":34,\"city\":1000,\"created_at\":\"2010-07-16 19:24:01\",\"description\":\"<REDACTED>\",\"msn\":\"<REDACTED>\",\"default_avatar\":0,\"real_name\":\"<REDACTED>\",\"gender_state\":1,\"qq_visible\":0,\"email_visible\":1,\"province\":32,\"screen_name\":\"<NAME_9>\",\"real_name_visible\":0,\"url_visible\":2,\"hometown_city\":5,\"id\":\"<UID_9>\",\"lang\":\"zh-cn\",\"msn_visible\":1,\"profileImageUrl\":\"https://tvax1.sinaimg.cn/crop.0.0.650.650.50/anon_avatar_b",
       "category": "other",
       "mutating": false,
       "function_title": "Primary account profile",
@@ -6442,11 +6442,11 @@
       "live_http_status": 200,
       "live_available": true
     },
-    "weibo.com GET /u/1176110000": {
+    "weibo.com GET /u/<UID_9>": {
       "host": "weibo.com",
       "method": "GET",
-      "path": "/u/1176110000",
-      "url": "https://weibo.com/u/1176110000",
+      "path": "/u/<UID_9>",
+      "url": "https://weibo.com/u/<UID_9>",
       "count": 3,
       "query": {},
       "post": {},

@@ -67,11 +67,11 @@ the wall:
     long streak of hard failures stops the run (progress is saved first).
 
 Usage (from src/):
-    python weibo-tool.py stranger-visit --user cake
-    python weibo-tool.py stranger-visit --user cake --count 50
-    python weibo-tool.py stranger-visit --user cake --dry-run   # collect + report, no visits
-    python weibo-tool.py stranger-visit --user cake --max-friends 50   # bounded crawl
-    python weibo-tool.py stranger-visit --user cake --refresh-cache    # re-crawl friends
+    python weibo-tool.py stranger-visit --user <label>
+    python weibo-tool.py stranger-visit --user <label> --count 50
+    python weibo-tool.py stranger-visit --user <label> --dry-run   # collect + report, no visits
+    python weibo-tool.py stranger-visit --user <label> --max-friends 50   # bounded crawl
+    python weibo-tool.py stranger-visit --user <label> --refresh-cache    # re-crawl friends
 """
 import argparse
 import json
