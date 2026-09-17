@@ -55,10 +55,11 @@ def main():
             break
 
     print(json.dumps(out, ensure_ascii=False, indent=2))
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "latest_videos.json"), "w", encoding="utf-8") as f:
+    _data_dir = os.path.join(_ROOT, "src", "data")
+    os.makedirs(_data_dir, exist_ok=True)
+    with open(os.path.join(_data_dir, "latest_videos.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
-    print("Saved latest_videos.json (%d videos)" % len(out))
+    print("Saved latest_videos.json (%d videos) -> %s" % (len(out), _data_dir))
 
 
 if __name__ == "__main__":

@@ -41,7 +41,7 @@ from auth import Auth
 REPORT_EVERY = 1          # seconds of wall-clock between beacons (vs normal 30s)
 STEP_SECONDS = 30         # seconds we CLAIM watched per beacon (vs real ~1s)
 REPS_PER_VIDEO = 10
-LATEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "latest_videos.json")
+LATEST = os.path.join(_ROOT, "src", "data", "latest_videos.json")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 

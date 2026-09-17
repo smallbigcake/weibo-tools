@@ -1,10 +1,10 @@
-"""Daily FastWatch-1s runner for the `author` account's recent videos.
+"""Daily FastWatch runner for the `author` account's recent videos.
 
 Invoked once per day by the `daily-fastwatch-1s` CodeBuddy automation (or
 manually). It reuses the real experiment script so every behavior stays
 identical to running it by hand:
 
-  src/experiment/fetch/quick_watch_recent.py   (the "FastWatch-1s" method)
+  src/experiment/fetch/quick_watch_recent.py   (the FastWatch method; pace via --delay)
 
 That script POSTs the FULL playback-heartbeat sequence for each of author's
 videos published in the last `--days` days -- start, a progress heartbeat every
@@ -20,9 +20,9 @@ This runner only:
     the other runners).
 
 Daily defaults (tweak via flags or the automation's command):
-  --days 30 --rounds 10 --delay 1.0 --cadence 30 --ticks
+  --days 30 --rounds 10 --delay 1.0 --cadence 30
 
-`--rounds 10`, `--cadence 30` and full-sequence beacons (`--ticks`) match the
+`--rounds 10`, `--cadence 30` and full-sequence beacons match the
 experiment's own defaults; the runner forwards an explicit value for every flag,
 so its defaults are what a bare daily run actually uses. Beacon volume per video
 is 2 + floor(duration / cadence), so the daily total scales with both the number
@@ -105,7 +105,7 @@ def _preflight_session(viewer_uid):
 
 def main():
     ap = argparse.ArgumentParser(
-        description='Daily FastWatch-1s runner for author videos')
+        description='Daily FastWatch runner for author videos')
     ap.add_argument('--days', type=int, default=30,
                     help='only videos published in the last N days (inner loop)')
     ap.add_argument('--rounds', type=int, default=10,
@@ -115,12 +115,7 @@ def main():
                     help='seconds between beacon POSTs / videos')
     ap.add_argument('--cadence', type=float, default=30,
                     help='step, in reported seconds, between progress heartbeats '
-                         '(ticks mode; default 30)')
-    ap.add_argument('--ticks', dest='ticks', action='store_true', default=True,
-                    help='emit the FULL heartbeat sequence (DEFAULT): start, a '
-                         'progress heartbeat every --cadence seconds, and the end')
-    ap.add_argument('--no-ticks', dest='ticks', action='store_false',
-                    help='compact mode: only a start and an end beacon per video')
+                         '(default 30)')
     ap.add_argument('--repeat', type=int, default=1,
                     help='repeat the beacon sequence this many times per video')
     ap.add_argument('--dry-run', action='store_true',
@@ -134,15 +129,13 @@ def main():
             '--delay', str(args.delay),
             '--cadence', str(args.cadence),
             '--repeat', str(args.repeat)]
-    # Always forwarded explicitly; --ticks (full sequence) is the default, so
-    # --no-ticks is what falls back to the compact start+end form.
-    argv.append('--ticks' if args.ticks else '--no-ticks')
+    # Always forwarded explicitly; the FULL heartbeat sequence is the only form.
     if args.dry_run:
         argv.append('--dry-run')
 
     qw = _load_experiment()
     run_args = {'days': args.days, 'rounds': args.rounds, 'delay': args.delay,
-                'ticks': args.ticks, 'cadence': args.cadence,
+                'cadence': args.cadence,
                 'repeat': args.repeat, 'dry_run': args.dry_run}
 
     # Restore the viewer session before doing anything. If it cannot be renewed
@@ -164,6 +157,7 @@ def main():
             'fail': 0,
             'total_videos_played': 0,
             'elapsed_seconds_log': 0.0,
+            'total_watch_seconds': 0,
             'error': 'session_not_restored',
         }
         with open(LOG, 'a', encoding='utf-8') as f:
@@ -182,11 +176,13 @@ def main():
         'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
         'cycle': 'auto',
         'args': run_args,
+        'list_source': summary.get('list_source'),
         'elapsed_s': elapsed,
         'ok': summary.get('ok'),
         'fail': summary.get('fail'),
         'total_videos_played': summary.get('total_videos_played'),
         'elapsed_seconds_log': summary.get('elapsed_seconds'),
+        'total_watch_seconds': summary.get('total_watch_seconds'),
     }
     with open(LOG, 'a', encoding='utf-8') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
