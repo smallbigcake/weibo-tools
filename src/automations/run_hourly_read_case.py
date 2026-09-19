@@ -6,7 +6,7 @@ automation (or manually). It:
   - visits the post with the viewer account (pure-HTTP GET of the detail page,
     no browser),
   - measures reads_count AFTER,
-and appends one JSON line to src/log/hourly_read_case.jsonl.
+and appends one JSON line to src/log/automation/hourly_read_case.jsonl.
 
 Controlled visits do NOT increment reads_count (proven); the visit is just a
 fixed observation point to watch the ORGANIC growth of a real public post.
@@ -51,7 +51,7 @@ CASE_ID = '5122644911587948'
 DETAIL = 'https://weibo.com/%s/%s' % (AUTHOR_UID, CASE_MB)
 VIEWER_COOKIE_FILE = os.path.join(SRC, 'cookies.%s.weibo' % VIEWER_UID)
 # Observation output is a log, so it lives with the other runtime logs.
-LOG = os.path.join(SRC, 'log', 'hourly_read_case.jsonl')
+LOG = os.path.join(SRC, 'log', 'automation', 'hourly_read_case.jsonl')
 UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 H_JSON = {'User-Agent': UA, 'Accept': 'application/json, text/plain, */*',

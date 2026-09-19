@@ -42,9 +42,9 @@ Flags:
     --no-svip-only  visit every personal account regardless of tier.
     --refresh-fof-cache  re-crawl friends' follow lists (ignore the cache).
 
-Appends one JSON line to src/automations/profile_visit_log.jsonl with the
+Appends one JSON line to src/log/automation/profile_visit_log.jsonl with the
 run summary (coverage per leg + return code + elapsed seconds). That log file is
-git-ignored (see .gitignore: src/automations/*.jsonl); only this script is
+git-ignored (see .gitignore: src/log/automation/); only this script is
 tracked.
 """
 import sys
@@ -73,7 +73,9 @@ except Exception:
     _CFG = {}
 
 AUTHOR_LABEL = _CFG.get('author_label', 'author')  # resolves to the author uid via cookies.labels.json (non-committed config)
-LOG = os.path.join(HERE, 'profile_visit_log.jsonl')
+AUTOMATION_LOG_DIR = os.path.join(SRC, 'log', 'automation')
+os.makedirs(AUTOMATION_LOG_DIR, exist_ok=True)
+LOG = os.path.join(AUTOMATION_LOG_DIR, 'profile_visit_log.jsonl')
 DATA_ROOT = os.path.join(SRC, 'data', 'relations')
 CACHE_ROOT = os.path.join(SRC, '.cache', 'profile_visit')
 STRANGER_CACHE = os.path.join(SRC, '.cache', 'stranger_visit')

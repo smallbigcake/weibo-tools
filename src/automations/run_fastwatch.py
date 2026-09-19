@@ -16,7 +16,7 @@ This runner only:
   * sets up cwd / sys.path the same way the experiment expects,
   * forwards a small, safe set of CLI flags (with daily defaults),
   * after the experiment finishes, appends one compact JSON summary line to
-    src/automations/fastwatch_log.jsonl (git-ignored; same convention as
+    src/log/automation/fastwatch_log.jsonl (git-ignored; same convention as
     the other runners).
 
 Daily defaults (tweak via flags or the automation's command):
@@ -52,7 +52,9 @@ SRC = os.path.abspath(os.path.join(HERE, '..'))
 sys.path.insert(0, SRC)
 os.chdir(SRC)
 
-LOG = os.path.join(HERE, 'fastwatch_log.jsonl')
+AUTOMATION_LOG_DIR = os.path.join(SRC, 'log', 'automation')
+os.makedirs(AUTOMATION_LOG_DIR, exist_ok=True)
+LOG = os.path.join(AUTOMATION_LOG_DIR, 'fastwatch_log.jsonl')
 EXP_MODULE = os.path.join(SRC, 'experiment', 'fetch', 'quick_watch_recent.py')
 
 
