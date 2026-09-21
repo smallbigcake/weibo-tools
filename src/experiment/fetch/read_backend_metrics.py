@@ -104,9 +104,9 @@ def main():
         },
         "videos": videos,
     }
-    os.makedirs(os.path.join(SRC_DIR, "data"), exist_ok=True)
+    os.makedirs(os.path.join(SRC_DIR, "data", "backend"), exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    path = os.path.join(SRC_DIR, "data", "backend_metrics_%s.json" % stamp)
+    path = os.path.join(SRC_DIR, "data", "backend", "backend_metrics_%s.json" % stamp)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("snapshotted %d videos, total play_count=%s -> %s" %

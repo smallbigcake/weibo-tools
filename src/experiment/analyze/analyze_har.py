@@ -17,7 +17,7 @@ import sys
 from datetime import datetime
 
 HAR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                   "..", "tmp", "weibo-video-timeout.har")
+                   "..", "tmp", "video", "weibo-video-timeout.har")
 
 
 def load():

@@ -3,7 +3,7 @@ creator-center `getVideoList` endpoint, recording every metadata field returned,
 and persist to a data file that can be re-run to UPDATE (new videos appended,
 existing videos' metadata refreshed).
 
-Output: src/data/author_videos.json
+Output: src/data/video/author_videos.json
   {
     "meta": { uid, source, updated_at, total, last_run_new,
               last_run_updated, prev_updated_at, first_created, last_created },
@@ -51,7 +51,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 ENDPOINT = "https://weibo.com/ajax/multimedia/getVideoList"
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUT = os.path.join(SRC_DIR, "data", "author_videos.json")
+OUT = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
 PAGE_DELAY = 1.0
 END_CURSORS = {"", "0", "-1"}
 

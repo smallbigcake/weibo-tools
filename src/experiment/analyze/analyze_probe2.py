@@ -5,7 +5,7 @@ import os
 import re
 
 EXP = os.path.dirname(os.path.abspath(__file__))
-log = json.load(open(os.path.join(EXP, "probe_playduration_log.json"), encoding="utf-8"))
+log = json.load(open(os.path.join(os.path.dirname(os.path.dirname(EXP)), "data", "probe", "probe_playduration_log.json"), encoding="utf-8"))
 STEP = 30
 
 for v in log:

@@ -81,7 +81,7 @@ def main():
         browser.close()
 
     urls = [a["url"] for a in AJAX]
-    with open(os.path.join(EXP, "creatorcenter_ajax.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(os.path.dirname(os.path.dirname(EXP)), "tmp", "capture", "creatorcenter_ajax.json"), "w", encoding="utf-8") as f:
         json.dump(AJAX, f, ensure_ascii=False, indent=2)
     print("=== %d ajax responses (unique urls: %d) ===" % (len(AJAX), len(set(urls))))
     for u in sorted(set(urls)):

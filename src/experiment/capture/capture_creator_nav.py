@@ -89,7 +89,7 @@ def main():
         page2.wait_for_timeout(4000)
         browser.close()
 
-    with open(os.path.join(EXP, "creator_nav.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(os.path.dirname(os.path.dirname(EXP)), "tmp", "capture", "creator_nav.json"), "w", encoding="utf-8") as f:
         json.dump({"links": links, "hits": HITS}, f, ensure_ascii=False, indent=2)
     print("\n=== video-detail ajax hits (%d) ===" % len(HITS))
     for h in HITS[:25]:

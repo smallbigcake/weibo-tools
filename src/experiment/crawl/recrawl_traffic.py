@@ -1,6 +1,6 @@
 """Targeted re-crawl: refresh ONLY the fields that suffered from the unit /
 staleness bug -- `weibo_info` and `traffic_7d` (per-video 7-day play count +
-watch time) -- and update them IN PLACE in author_video_stats.json, keeping all
+watch time) -- and update them IN PLACE in src/data/video/author_video_stats.json, keeping all
 other fields (diagnosis, clarity_score, play_ratio, traffic_source, portrait)
 untouched.
 

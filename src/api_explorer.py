@@ -4,7 +4,7 @@ Builds a unified catalog of Weibo's web APIs from two complementary sources
 and emits one machine-readable file (`doc/api_inventory.json`) plus one
 human-readable doc (`doc/api_inventory.md`):
 
-  1. Front-end JS bundles (live weibo.com) — `src/tmp/endpoints.txt`, produced by
+  1. Front-end JS bundles (live weibo.com) — `src/tmp/endpoints/endpoints.txt`, produced by
      `src/tmp/extract_endpoints.py`. These are *all* `/ajax/...` paths the SPA
      references. We probe them with the logged-in session to record status and
      response shape. No guessing.
@@ -61,9 +61,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DOC_DIR = os.path.join(HERE, '..', 'doc')
 INVENTORY_JSON = os.path.join(DOC_DIR, 'api_inventory.json')
 INVENTORY_MD = os.path.join(DOC_DIR, 'api_inventory.md')
-ENDPOINTS_TXT = os.path.join(HERE, 'tmp', 'endpoints.txt')
-BURP_FILES = [os.path.join(HERE, 'tmp', 'http_history_burp_suite.xml'),
-              os.path.join(HERE, 'tmp', 'site_map_burp_suite.xml')]
+ENDPOINTS_TXT = os.path.join(HERE, 'tmp', 'endpoints', 'endpoints.txt')
+BURP_FILES = [os.path.join(HERE, 'tmp', 'endpoints', 'http_history_burp_suite.xml'),
+              os.path.join(HERE, 'tmp', 'endpoints', 'site_map_burp_suite.xml')]
 
 # Path fragments that strongly imply a mutation (so we treat them as unsafe).
 _MUTATING_HINTS = (
@@ -444,7 +444,7 @@ def path_of(url):
 
 def load_scraped_endpoints():
     if not os.path.exists(ENDPOINTS_TXT):
-        raise SystemExit('endpoints.txt not found. Run: python src/tmp/extract_endpoints.py')
+        raise SystemExit('endpoints.txt not found. Run: python src/tmp/endpoints/extract_endpoints.py')
     out = []
     with open(ENDPOINTS_TXT, 'r', encoding='utf-8') as f:
         for line in f:

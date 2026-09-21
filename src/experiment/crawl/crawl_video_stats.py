@@ -1,7 +1,7 @@
 """Crawl per-video statistics for ALL author videos from the creator-center
 (me.weibo.com) single-video detail endpoints, and save to a data file.
 
-For each video (oid + mid from src/data/author_videos.json) we call the same
+For each video (oid + mid from src/data/video/author_videos.json) we call the same
 endpoints the single-video detail page fires, all carrying
 video_oid + mid + blogger_uid:
 
@@ -16,7 +16,7 @@ video_oid + mid + blogger_uid:
 All JSON keys are English and follow the ORIGINAL API field names. Chinese
 appears only as values (e.g. label "关注", text "作品画质清晰度过低").
 
-Output: src/data/author_video_stats.json
+Output: src/data/video/author_video_stats.json
   { meta:{...}, videos:{ <mid>: { mid, video_oid, weibo_info, traffic_7d,
                                 diagnosis, clarity_score, play_ratio,
                                 traffic_source, portrait } } }
@@ -56,8 +56,8 @@ from auth import Auth
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VIDEOS_JSON = os.path.join(SRC_DIR, "data", "author_videos.json")
-OUT_JSON = os.path.join(SRC_DIR, "data", "author_video_stats.json")
+VIDEOS_JSON = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
+OUT_JSON = os.path.join(SRC_DIR, "data", "video", "author_video_stats.json")
 BASE = "https://me.weibo.com/api/proxy/native"
 
 

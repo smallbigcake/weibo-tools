@@ -17,7 +17,7 @@ Why getVideoList.play_count (not creator-center aggregates):
 
 Protocol:
   1. Resolve each --mid to (oid, live play_count) via getVideoList (author session).
-  2. Print a table and APPEND one dated JSON line to src/data/probe_verify_log.jsonl.
+  2. Print a table and APPEND one dated JSON line to src/data/probe/probe_verify_log.jsonl.
 
 This script performs NO replay -- it only reads. The replay is applied separately
 by quick_watch_delay_probe.py / run_fastwatch.py --delay 30.
@@ -51,7 +51,7 @@ GETVIDEO_URL = "https://weibo.com/ajax/multimedia/getVideoList"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 CREATOR_REF = "https://weibo.com/creator"
-LOG_PATH = os.path.join(SRC_DIR, "data", "probe_verify_log.jsonl")
+LOG_PATH = os.path.join(SRC_DIR, "data", "probe", "probe_verify_log.jsonl")
 
 
 def fetch_video_list(session, pages=8):

@@ -28,7 +28,7 @@ from playwright.sync_api import sync_playwright
 COOKIE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "cookies.%s.weibo" % AUTHOR_UID)
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tmp", "me_weibo_ajax.json")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tmp", "creator", "me_weibo_ajax.json")
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 

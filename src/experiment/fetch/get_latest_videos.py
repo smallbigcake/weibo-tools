@@ -55,7 +55,7 @@ def main():
             break
 
     print(json.dumps(out, ensure_ascii=False, indent=2))
-    _data_dir = os.path.join(_ROOT, "src", "data")
+    _data_dir = os.path.join(_ROOT, "src", "data", "video")
     os.makedirs(_data_dir, exist_ok=True)
     with open(os.path.join(_data_dir, "latest_videos.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)

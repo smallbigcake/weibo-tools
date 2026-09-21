@@ -15,7 +15,7 @@ from auth import Auth
 from crawl_video_stats import AUTHOR_UID, BASE, UA
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VIDEOS = json.load(open(os.path.join(SRC_DIR, "data", "author_videos.json"), encoding="utf-8"))["videos"]
+VIDEOS = json.load(open(os.path.join(SRC_DIR, "data", "video", "author_videos.json"), encoding="utf-8"))["videos"]
 
 
 def get_raw(a, params):

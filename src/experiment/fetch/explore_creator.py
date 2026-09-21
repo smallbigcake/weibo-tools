@@ -60,7 +60,7 @@ def dump_videotab():
                                "Referer": "https://weibo.com/%s" % AUTHOR_UID},
                       timeout=20000)
     data = r.json()
-    path = os.path.join(EXP, "videotab_dump.json")
+    path = os.path.join(os.path.dirname(os.path.dirname(EXP)), "tmp", "creator", "videotab_dump.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     # show the keys of the first video item
@@ -123,7 +123,7 @@ def live_explore():
             page.wait_for_timeout(4000)
             print("visited %s (hits=%d)" % (url, len(HITS)))
         browser.close()
-    with open(os.path.join(EXP, "creator_explore.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(os.path.dirname(os.path.dirname(EXP)), "tmp", "creator", "creator_explore.json"), "w", encoding="utf-8") as f:
         json.dump(HITS, f, ensure_ascii=False, indent=2)
     print("\n=== %d candidate weibo AJAX responses ===" % len(HITS))
     for h in HITS[:30]:

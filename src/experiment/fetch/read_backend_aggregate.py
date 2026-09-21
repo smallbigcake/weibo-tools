@@ -188,9 +188,9 @@ def main():
         "yesterday_top5_play": top5,
     }
 
-    os.makedirs(os.path.join(SRC_DIR, "data"), exist_ok=True)
+    os.makedirs(os.path.join(SRC_DIR, "data", "backend"), exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    path = os.path.join(SRC_DIR, "data", "backend_aggregate_%s.json" % stamp)
+    path = os.path.join(SRC_DIR, "data", "backend", "backend_aggregate_%s.json" % stamp)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, ensure_ascii=False, indent=2)
 

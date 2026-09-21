@@ -9,7 +9,7 @@ Targets (all carry video_oid + mid + blogger_uid):
 """
 import json
 
-HAR = "src/tmp/weibo-video-statistic-single.har"
+HAR = "src/tmp/video/weibo-video-statistic-single.har"
 
 TARGETS = [
     "datavidnew?video_oid",

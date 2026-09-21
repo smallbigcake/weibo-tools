@@ -9,7 +9,7 @@ import re
 import sys
 from urllib.parse import urlparse, parse_qs
 
-HAR = "src/tmp/weibo-video-statistic.har"
+HAR = "src/tmp/video/weibo-video-statistic.har"
 
 STATIC_EXT = (".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".webp",
               ".woff", ".woff2", ".ttf", ".svg", ".mp4", ".m3u8", ".ico")

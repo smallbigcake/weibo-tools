@@ -27,7 +27,7 @@
 | 方法 | GET |
 | Referer | `https://weibo.com/creator` |
 | 调用方 | `fetch_recent_videos.py`、`read_backend_metrics.py` |
-| 输出 | `src/data/author_videos.json`（`fetch_recent_videos.py`）；`src/data/backend_metrics_<ts>.json`（`read_backend_metrics.py`） |
+| 输出 | `src/data/video/author_videos.json`（`fetch_recent_videos.py`）；`src/data/backend/backend_metrics_<ts>.json`（`read_backend_metrics.py`） |
 
 参数：
 
@@ -50,7 +50,7 @@
 | 方法 | GET |
 | Referer | `https://me.weibo.com/` |
 | 调用方 | `crawl_video_stats.py`（`crawl_one` 基础调用） |
-| 输出 | `src/data/author_video_stats.json` → `weibo_info` |
+| 输出 | `src/data/video/author_video_stats.json` → `weibo_info` |
 
 参数（以下所有 `datavidnew` 调用通用）：
 
@@ -134,7 +134,7 @@
 | 方法 | GET |
 | Referer | `https://me.weibo.com/` |
 | 调用方 | `read_backend_aggregate.py` → `fetch_yesterday` |
-| 输出 | `src/data/backend_aggregate_<ts>.json` → `aggregates.yesterday` |
+| 输出 | `src/data/backend/backend_aggregate_<ts>.json` → `aggregates.yesterday` |
 
 参数：
 
@@ -189,11 +189,11 @@
 
 | 文件 | 写入方 | 内容 |
 |---|---|---|
-| `src/data/author_videos.json` | `fetch_recent_videos.py` | 完整视频目录（元数据 + 累计 `play_count`），按时间倒序。重跑会刷新元数据并追加新视频。 |
-| `src/data/backend_metrics_<ts>.json` | `read_backend_metrics.py` | 扁平的逐视频指标（播放/赞/评论/转发/弹幕计数），按次快照。 |
-| `src/data/author_video_stats.json` | `crawl_video_stats.py` | 逐视频分析：`weibo_info`、`traffic_7d`（7日播放量 + 观看秒数）、`diagnosis`、`clarity_score`、`play_ratio`、`traffic_source`、`portrait`。按 mid 索引；可断点续跑。 |
-| `src/data/backend_aggregate_<ts>.json` | `read_backend_aggregate.py` | 账号级聚合（昨日 / 近7日 / 近30日，各 6 项指标，含单位）+ 昨日播放量 TOP5。每次运行带时间戳。 |
-| `src/data/archive/*.json` | 自动（`data_archive.py`） | 每次每日刷新前，上一份 `author_videos.json` / `author_video_stats.json` 会按自身 `meta.updated_at`（UTC）命名归档于此。 |
+| `src/data/video/author_videos.json` | `fetch_recent_videos.py` | 完整视频目录（元数据 + 累计 `play_count`），按时间倒序。重跑会刷新元数据并追加新视频。 |
+| `src/data/backend/backend_metrics_<ts>.json` | `read_backend_metrics.py` | 扁平的逐视频指标（播放/赞/评论/转发/弹幕计数），按次快照。 |
+| `src/data/video/author_video_stats.json` | `crawl_video_stats.py` | 逐视频分析：`weibo_info`、`traffic_7d`（7日播放量 + 观看秒数）、`diagnosis`、`clarity_score`、`play_ratio`、`traffic_source`、`portrait`。按 mid 索引；可断点续跑。 |
+| `src/data/backend/backend_aggregate_<ts>.json` | `read_backend_aggregate.py` | 账号级聚合（昨日 / 近7日 / 近30日，各 6 项指标，含单位）+ 昨日播放量 TOP5。每次运行带时间戳。 |
+| `src/data/video/archive/*.json` | 自动（`data_archive.py`） | 每次每日刷新前，上一份 `author_videos.json` / `author_video_stats.json` 会按自身 `meta.updated_at`（UTC）命名归档于此。 |
 
 ## 刷新与归档流程
 

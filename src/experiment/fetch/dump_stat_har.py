@@ -9,7 +9,7 @@ Targets (by URL substring):
 """
 import json
 
-HAR = "src/tmp/weibo-video-statistic.har"
+HAR = "src/tmp/video/weibo-video-statistic.har"
 
 TARGETS = [
     "datavidnew",

@@ -110,13 +110,13 @@
 
 | 文件 | 产出脚本 | 内容 |
 |---|---|---|
-| `src/data/author_videos.json` | `fetch_recent_videos.py` | 视频清单 + 静态元数据（累计 `play_count`、`duration`、标题、标签、封面、创建时间、`statistics` 等）。结构：`{ meta, videos[] }` |
-| `src/data/author_video_stats.json` | `crawl_video_stats.py`（全量）/ `recrawl_traffic.py`（仅刷新 `weibo_info`+`traffic_7d`） | 逐视频深度分析。结构：`{ meta, videos{ <mid>: { weibo_info, traffic_7d, diagnosis, clarity_score, play_ratio, traffic_source, portrait } } }` |
-| `src/data/backend_aggregate_<ts>.json` | `read_backend_aggregate.py` | 账号级聚合快照：昨日 / 近7日 / 近30日 的播放量、播放时长、发布、互动，及昨日播放 TOP5。`<ts>` 为 UTC 时间戳 |
-| `src/data/backend_metrics_<ts>.json` | `read_backend_metrics.py` | 逐视频后端指标快照：`mid/title/create_time/duration/play_count/comment/like/repost/danmaku/visibility` |
+| `src/data/video/author_videos.json` | `fetch_recent_videos.py` | 视频清单 + 静态元数据（累计 `play_count`、`duration`、标题、标签、封面、创建时间、`statistics` 等）。结构：`{ meta, videos[] }` |
+| `src/data/video/author_video_stats.json` | `crawl_video_stats.py`（全量）/ `recrawl_traffic.py`（仅刷新 `weibo_info`+`traffic_7d`） | 逐视频深度分析。结构：`{ meta, videos{ <mid>: { weibo_info, traffic_7d, diagnosis, clarity_score, play_ratio, traffic_source, portrait } } }` |
+| `src/data/backend/backend_aggregate_<ts>.json` | `read_backend_aggregate.py` | 账号级聚合快照：昨日 / 近7日 / 近30日 的播放量、播放时长、发布、互动，及昨日播放 TOP5。`<ts>` 为 UTC 时间戳 |
+| `src/data/backend/backend_metrics_<ts>.json` | `read_backend_metrics.py` | 逐视频后端指标快照：`mid/title/create_time/duration/play_count/comment/like/repost/danmaku/visibility` |
 
 > 历史归档：`author_videos.json` 与 `author_video_stats.json` 在每次覆盖写前，会由
-> `data_archive.archive_existing` 按文件自身 `meta.updated_at` 复制到 `src/data/archive/`
+> `data_archive.archive_existing` 按文件自身 `meta.updated_at` 复制到 `src/data/video/archive/`
 > （文件名带时间戳），可逐日追溯。
 
 ---

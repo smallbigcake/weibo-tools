@@ -15,8 +15,8 @@ from collections import Counter, defaultdict
 from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "video_playback_capture.json")
-OUT = os.path.join(HERE, "video_playback_report.txt")
+SRC = os.path.join(os.path.dirname(os.path.dirname(HERE)), "tmp", "capture", "video_playback_capture.json")
+OUT = os.path.join(os.path.dirname(os.path.dirname(HERE)), "tmp", "capture", "video_playback_report.txt")
 
 MEDIA_RE = re.compile(r"\.(m3u8|ts|mp4|m4s|m4a|webm|mov)(\?|$)", re.I)
 

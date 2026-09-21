@@ -46,7 +46,7 @@ Selection (matches the old quick_watch_recent.py)
 --------------------------------------------------------------------------
     videos = author videos published in last `days` days (default 30), fetched
              LIVE at run time via the creator-center getVideoList (AUTHOR_UID
-             session); falls back to the static src/data/author_videos.json
+             session); falls back to the static src/data/video/author_videos.json
              snapshot if the author session is unavailable.
 
 Two run shapes, both honoring --channels:
@@ -97,7 +97,7 @@ from auth import Auth
 from logutil import setup as _setup_logging
 _setup_logging()  # idempotent; configures the shared weibo.log for other modules
 # Dedicated logger for THIS script: verbose per-request dumps go to a SEPARATE
-# DAILY file (src/log/quick_watch_YYYYMMDD.log); console stays at INFO.
+# DAILY file (src/log/watch/quick_watch_YYYYMMDD.log); console stays at INFO.
 log = logging.getLogger('quick_watch')
 log.setLevel(logging.DEBUG)
 log.propagate = False
@@ -106,7 +106,7 @@ if not log.handlers:
         '%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s')
     _qw_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'log')
+        'log', 'watch')
     _qw_day = datetime.now().strftime('%Y%m%d')
     _qw_file = logging.FileHandler(
         os.path.join(_qw_dir, 'quick_watch_%s.log' % _qw_day), encoding='utf-8')
@@ -119,7 +119,7 @@ if not log.handlers:
     log.addHandler(_qw_console)
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VIDEO_DATA = os.path.join(SRC_DIR, "data", "author_videos.json")
+VIDEO_DATA = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
 # All watch run logs live under src/data/watch/ (kept apart from the shared
 # author_videos.json DB and the diag/crawl outputs that also live in src/data).
 WATCH_DIR = os.path.join(SRC_DIR, "data", "watch")
@@ -279,7 +279,7 @@ def fetch_video_list(session, pages=8, days=30):
 
 def load_window(days):
     """Normalized author videos published within the last `days` days (from the
-    static src/data/author_videos.json snapshot; fallback when live is unavailable)."""
+    static src/data/video/author_videos.json snapshot; fallback when live is unavailable)."""
     with open(VIDEO_DATA, encoding="utf-8") as f:
         data = json.load(f)
     cutoff = (time.time() - days * 86400) * 1000
@@ -557,7 +557,7 @@ def snapshot_aggregates(tag):
             "yesterday": yest,
             "last_7d": sev.get("last_7d", {}),
             "last_30d": sev.get("last_30d", {})}
-    path = os.path.join(SRC_DIR, "data", "quick_watch_%s.json" % tag)
+    path = os.path.join(SRC_DIR, "data", "watch", "quick_watch_%s.json" % tag)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
@@ -569,7 +569,7 @@ def _val(snap, period, key):
 
 def _write_audit(results, channels):
     run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    res_path = os.path.join(SRC_DIR, "data",
+    res_path = os.path.join(WATCH_DIR,
                             "quick_watch_responses_%s.jsonl" % run_stamp)
     with open(res_path, "w", encoding="utf-8") as f:
         for rec in results:

@@ -756,7 +756,7 @@ class Auth(object):
 
         import base64
         from PIL import Image
-        qr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', 'weibo_qr.png')
+        qr_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', 'qr', 'weibo_qr.png')
         os.makedirs(os.path.dirname(qr_path), exist_ok=True)
         # The popup build returns a base64 data string; some deployments return
         # a plain URL. Handle both so we always end up with a local PNG.
@@ -1121,7 +1121,7 @@ class _QRWindow:
             qr_id, img = auth.qr_code_gen()
             self._qr_id = qr_id
             path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               'tmp', 'weibo_qr.png')
+                               'tmp', 'qr', 'weibo_qr.png')
             os.makedirs(os.path.dirname(path), exist_ok=True)
             img.save(path)
             logging.info(f'QR round {self._round}/{max_rounds} (headless): '

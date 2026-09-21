@@ -9,7 +9,7 @@ import os
 import re
 from urllib.parse import urlparse, parse_qs
 
-HAR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tmp", "weibo-video-timeout.har")
+HAR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tmp", "video", "weibo-video-timeout.har")
 
 
 def load():

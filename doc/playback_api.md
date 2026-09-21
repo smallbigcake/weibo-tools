@@ -30,7 +30,7 @@ All endpoints live under two hosts:
 | Method | GET |
 | Referer | `https://weibo.com/creator` |
 | Used by | `fetch_recent_videos.py`, `read_backend_metrics.py` |
-| Output | `src/data/author_videos.json` (`fetch_recent_videos.py`); `src/data/backend_metrics_<ts>.json` (`read_backend_metrics.py`) |
+| Output | `src/data/video/author_videos.json` (`fetch_recent_videos.py`); `src/data/backend/backend_metrics_<ts>.json` (`read_backend_metrics.py`) |
 
 Parameters:
 
@@ -54,7 +54,7 @@ Returns: `data.videos[]` — the full raw item for each video, including
 | Method | GET |
 | Referer | `https://me.weibo.com/` |
 | Used by | `crawl_video_stats.py` (`crawl_one`, default call) |
-| Output | `src/data/author_video_stats.json` → `weibo_info` |
+| Output | `src/data/video/author_video_stats.json` → `weibo_info` |
 
 Parameters (common to all `datavidnew` calls below):
 
@@ -139,7 +139,7 @@ English (project rule). Chinese appears only as values.
 | Method | GET |
 | Referer | `https://me.weibo.com/` |
 | Used by | `read_backend_aggregate.py` → `fetch_yesterday` |
-| Output | `src/data/backend_aggregate_<ts>.json` → `aggregates.yesterday` |
+| Output | `src/data/backend/backend_aggregate_<ts>.json` → `aggregates.yesterday` |
 
 Parameters:
 
@@ -194,11 +194,11 @@ Returns: `data.card_group[1].card_group` → type-`22` video cards with
 
 | File | Writer | Content |
 |---|---|---|
-| `src/data/author_videos.json` | `fetch_recent_videos.py` | Full video catalog (metadata + cumulative `play_count`), newest-first. Re-run refreshes metadata and appends new videos. |
-| `src/data/backend_metrics_<ts>.json` | `read_backend_metrics.py` | Flat per-video metrics (play/like/comment/repost/danmaku counts) per snapshot. |
-| `src/data/author_video_stats.json` | `crawl_video_stats.py` | Per-video analytics: `weibo_info`, `traffic_7d` (7-day play count + watch seconds), `diagnosis`, `clarity_score`, `play_ratio`, `traffic_source`, `portrait`. Keyed by mid; resumable. |
-| `src/data/backend_aggregate_<ts>.json` | `read_backend_aggregate.py` | Account-wide aggregates for 昨日 / 近7日 / 近30日 (6 metrics each, with units) + 昨日播放量TOP5. Timestamped per run. |
-| `src/data/archive/*.json` | auto (`data_archive.py`) | Before each daily refresh, the prior `author_videos.json` / `author_video_stats.json` is copied here with a filename stamped by its own `meta.updated_at` (UTC). |
+| `src/data/video/author_videos.json` | `fetch_recent_videos.py` | Full video catalog (metadata + cumulative `play_count`), newest-first. Re-run refreshes metadata and appends new videos. |
+| `src/data/backend/backend_metrics_<ts>.json` | `read_backend_metrics.py` | Flat per-video metrics (play/like/comment/repost/danmaku counts) per snapshot. |
+| `src/data/video/author_video_stats.json` | `crawl_video_stats.py` | Per-video analytics: `weibo_info`, `traffic_7d` (7-day play count + watch seconds), `diagnosis`, `clarity_score`, `play_ratio`, `traffic_source`, `portrait`. Keyed by mid; resumable. |
+| `src/data/backend/backend_aggregate_<ts>.json` | `read_backend_aggregate.py` | Account-wide aggregates for 昨日 / 近7日 / 近30日 (6 metrics each, with units) + 昨日播放量TOP5. Timestamped per run. |
+| `src/data/video/archive/*.json` | auto (`data_archive.py`) | Before each daily refresh, the prior `author_videos.json` / `author_video_stats.json` is copied here with a filename stamped by its own `meta.updated_at` (UTC). |
 
 ## Refresh & archive workflow
 
