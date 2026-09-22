@@ -203,3 +203,32 @@
 
 三者均尊重 API 自带的单位字段（聚合为小时，单视频 7 日为秒）。重跑前会先归档旧文件，
 因此历史数据不会丢失。
+
+## 播放写入信标（重放 / FastWatch）
+
+真实浏览器在 weibo.com 观看视频时，会发出三个播放**写入**信标（来自 `src/tmp/video/` 下
+2026-09-18 的观看 HAR）：
+
+| # | 端点 | 方法 | 时机 | 作用 | 携带观看时长的字段 |
+|---|---|---|---|---|---|
+| 1 | `multimedia.api.weibo.com/2/multimedia/user/play_history/report.json` | POST | 约每 30s 的 `seconds` 心跳 | 观看历史 / 播放量进度 | `seconds` |
+| 2 | `weibo.com/aj/video/playstatistics?ajwvr=6` | POST（multipart） | 每个视频开场时发**一次** | **播放开场注册**——缺失的那一块 | —（无时长） |
+| 3 | `weibo.com/ajax/log/h5playlog` | POST（multipart） | 约每 30s，与 #1 同步 | 播放日志；**播放时长正是由此聚合** | `valid_play_duration`（毫秒） |
+
+要点：
+- `playstatistics` 必须在开场时发一次。缺了它，`h5playlog` 的 `valid_play_duration`
+  心跳似乎会被丢弃——2026-09-18 的双通道（report.json + h5playlog）重放第二天并未使
+  播放时长增长；补上 `playstatistics` 是本次待验证的假设。
+- `playstatistics` 的 `sig` = **`md5(data + key + "yixiong&zhaolong5")`**——从
+  weibo-pro-next bundle 的 `PlayStatistics._md5Log` **还原**得到，并于 2026-09-21
+  与 2026-09-18 的 HAR sig 精确比对（完全匹配）。与 h5playlog 的区别**仅在 salt**
+  （h5playlog 用 `encryptedString`）。`data` = `JSON.stringify({uid,mid,keys,type,uuid,media_id})`；
+  `key` = `Log_<rand5>_<ts><rand4><count>`。（服务端也容忍错误 sig——已验证——但探针现已用正确 sig。）已接入快速播放 CLI 的 `--channels triple`（`quick_watch_recent.py`），默认仍为 `dual`。
+- `h5playlog` 的 `sig` = `md5(data+key+"encryptedString")`（已对照 HAR 验证）；
+  需带 `X-Xsrf-Token` + `x-requested-with: XMLHttpRequest`，否则 403。
+- `report.json` 两者都不需要。
+
+已在 `src/experiment/fetch/quick_watch_delay_probe.py` 中实现为**三通道**重放
+（report.json + h5playlog + playstatistics），三者均返回 200。播放时长的入账
+**滞后到次日**——次日用 `crawl_video_stats.py` 的 `traffic_7d.play_totallength_sec`
+对比目标视频与未被触碰的对照视频即可验证。

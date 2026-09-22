@@ -120,6 +120,9 @@ def main():
                          '(default 30)')
     ap.add_argument('--repeat', type=int, default=1,
                     help='repeat the beacon sequence this many times per video')
+    ap.add_argument('--channels', choices=['single', 'dual', 'triple'], default='dual',
+                    help='playback beacon channels forwarded to quick_watch_recent.py '
+                         '(default dual; triple adds playstatistics at each video start)')
     ap.add_argument('--dry-run', action='store_true',
                     help='only count videos/requests, send nothing')
     args = ap.parse_args()
@@ -130,7 +133,8 @@ def main():
             '--rounds', str(args.rounds),
             '--delay', str(args.delay),
             '--cadence', str(args.cadence),
-            '--repeat', str(args.repeat)]
+            '--repeat', str(args.repeat),
+            '--channels', args.channels]
     # Always forwarded explicitly; the FULL heartbeat sequence is the only form.
     if args.dry_run:
         argv.append('--dry-run')
@@ -138,7 +142,8 @@ def main():
     qw = _load_experiment()
     run_args = {'days': args.days, 'rounds': args.rounds, 'delay': args.delay,
                 'cadence': args.cadence,
-                'repeat': args.repeat, 'dry_run': args.dry_run}
+                'repeat': args.repeat, 'channels': args.channels,
+                'dry_run': args.dry_run}
 
     # Restore the viewer session before doing anything. If it cannot be renewed
     # (long-lived credential spent -> SSO retcode=6102), abort loudly instead of

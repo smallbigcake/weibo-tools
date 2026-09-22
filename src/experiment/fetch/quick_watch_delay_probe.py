@@ -51,7 +51,9 @@ except Exception:
 AUTHOR_UID = _CFG.get('author_uid')
 VIEWER_UID = _CFG.get('viewer_uid')
 import argparse
+import hashlib
 import os
+import random
 import sys
 import time
 from datetime import datetime, timezone
@@ -61,13 +63,102 @@ SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file
 sys.path.insert(0, SRC_DIR)
 sys.path.insert(0, os.path.join(SRC_DIR, 'experiment', 'fetch'))
 from auth import Auth
+from playback_beacons import send_playstatistics as _bc_send_playstatistics
 
 REPORT_URL = "https://multimedia.api.weibo.com/2/multimedia/user/play_history/report.json"
 GETVIDEO_URL = "https://weibo.com/ajax/multimedia/getVideoList"
+PLAYSTAT_URL = "https://weibo.com/aj/video/playstatistics?ajwvr=6"
+H5PLAYLOG_URL = "https://weibo.com/ajax/log/h5playlog"
 SOURCE = "339644097"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 CREATOR_REF = "https://weibo.com/creator"
+
+
+def _md5(s):
+    return hashlib.md5(s.encode("utf-8")).hexdigest()
+
+
+def _rand5():
+    return "".join(random.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(5))
+
+
+def _xsrf(session):
+    return session.cookies.get("XSRF-TOKEN", "")
+
+
+def _multipart(fields):
+    """Build a multipart/form-data body (mirrors the browser's WebKit boundary)."""
+    boundary = "----WebKitFormBoundaryAAAA"
+    parts = []
+    for name, val in fields.items():
+        parts.append(
+            "------WebKitFormBoundaryAAAA\r\n"
+            'Content-Disposition: form-data; name="%s"\r\n\r\n%s\r\n' % (name, val))
+    parts.append("------WebKitFormBoundaryAAAA--\r\n")
+    return "".join(parts)
+
+
+def _ajax_headers(session):
+    # /aj/ and /ajax/log/* both need the CSRF token + xhr header (else 403).
+    return {
+        "User-Agent": UA,
+        "Referer": "https://weibo.com/",
+        "Content-Type": "multipart/form-data; boundary=----WebKitFormBoundaryAAAA",
+        "X-Xsrf-Token": _xsrf(session),
+        "x-requested-with": "XMLHttpRequest",
+    }
+
+
+def send_playstatistics(session, mid, media_id, delay):
+    """THIRD playback beacon (the missing one). Fired ONCE per video at play
+    start. Delegates to the shared `playback_beacons.send_playstatistics`
+    (canonical algorithm recovered from the weibo-pro-next bundle, verified
+    2026-09-21 against the 2026-09-18 HAR sig)."""
+    status, ec = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, delay)
+    print("  playstatistics mid=%s -> %s" % (mid, status))
+    return status
+
+
+def send_h5playlog(session, mid, media_id, duration, play_ms, delay):
+    """SECOND playback beacon: heartbeats with valid_play_duration (the field
+    the creator-center PLAY DURATION aggregates from). One per 30s beat, in
+    lockstep with report.json. `sig` formula = md5(data+key+'encryptedString')
+    (verified against the 2026-09-18 HAR)."""
+    oid_full = "1034:" + media_id
+    now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    rk = _rand5()
+    ts = int(time.time() * 1000)
+    row = ";".join([
+        now,                 # 1 play_time
+        str(VIEWER_UID),     # 2 uid (viewer)
+        oid_full,            # 3 oid
+        str(mid),            # 4 mid
+        str(AUTHOR_UID),     # 5 mid_uid (author)
+        str(mid),            # 6 rootmid
+        str(AUTHOR_UID),     # 7 rootuid
+        "%.2f" % float(duration),  # 8 duration (s)
+        "",                  # 9 (empty)
+        "1",                 # 10 isautoplay
+        str(play_ms),        # 11 playduration (ms)
+        "success",           # 12 firstframe_status
+        "",                  # 13 (empty)
+        "878",               # 14 (constant observed in HAR)
+        "0",                 # 15
+        str(play_ms),        # 16 valid_play_duration (ms)
+        "", "", "",          # 17,18,19 (empty)
+        "vf=>newPC,sid=>H5_%s_%d,qType=>720" % (rk, ts),  # 20 vf/sid/qType
+    ])
+    key = "Log_h5play_%s_%d" % (rk, ts)
+    sig = _md5(row + key + "encryptedString")
+    body = _multipart({"data": row, "key": key, "sig": sig})
+    try:
+        r = session.post(H5PLAYLOG_URL, data=body, headers=_ajax_headers(session),
+                         timeout=20000)
+        print("  h5playlog mid=%s ms=%s -> %s" % (mid, play_ms, r.status_code))
+    except Exception as ex:
+        print("  h5playlog mid=%s -> ERROR %s" % (mid, ex))
+    time.sleep(delay)
 
 
 def fetch_video_list(session, pages=8):
@@ -147,7 +238,10 @@ def build_sequence(duration, cadence):
 
 
 def send_sequence(session, mid, oid, duration, seq, delay, contribution=0):
+    media_id = str(oid).split(":")[-1]
+    sent_start = False
     for play_type, sec in seq:
+        # 1) report.json heartbeat (watch-history seconds) -- unchanged
         params = {
             "source": SOURCE,
             "play_type": play_type,
@@ -163,10 +257,19 @@ def send_sequence(session, mid, oid, duration, seq, delay, contribution=0):
         url = REPORT_URL + "?" + urlencode(params)
         try:
             r = session.post(url, headers={"User-Agent": UA, "Referer": "https://weibo.com/"}, timeout=20000)
-            print("  beacon mid=%s play_type=%s seconds=%s -> %s"
+            print("  report.json mid=%s play_type=%s seconds=%s -> %s"
                   % (mid, play_type, sec, r.status_code))
         except Exception as ex:
-            print("  beacon mid=%s -> ERROR %s" % (mid, ex))
+            print("  report.json mid=%s -> ERROR %s" % (mid, ex))
+
+        # 2) h5playlog heartbeat (valid_play_duration) -- the play-duration source
+        send_h5playlog(session, mid, media_id, duration, int(round(sec * 1000)), delay)
+
+        # 3) playstatistics (play-start registration) -- fired ONCE at start
+        if not sent_start:
+            send_playstatistics(session, mid, media_id, delay)
+            sent_start = True
+
         time.sleep(delay)
 
 

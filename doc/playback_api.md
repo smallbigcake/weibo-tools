@@ -209,3 +209,36 @@ Returns: `data.card_group[1].card_group` → type-`22` video cards with
 All three honor the API's own unit fields (hours for aggregates, seconds for
 per-video 7-day watch time). Re-running never loses history because the prior
 live files are archived before being overwritten.
+
+## Playback WRITE beacons (replay / FastWatch)
+
+When a REAL browser watches a video on weibo.com it fires THREE playback
+_WRITE_ beacons (discovered from the 2026-09-18 watch HAR under `src/tmp/video/`):
+
+| # | Endpoint | Method | When | Purpose | Watch-time field |
+|---|---|---|---|---|---|
+| 1 | `multimedia.api.weibo.com/2/multimedia/user/play_history/report.json` | POST | ~30s `seconds` heartbeat | watch-history / play_count progress | `seconds` |
+| 2 | `weibo.com/aj/video/playstatistics?ajwvr=6` | POST (multipart) | ONCE per video, at play start | **play-start registration** — the missing piece | — (no duration) |
+| 3 | `weibo.com/ajax/log/h5playlog` | POST (multipart) | ~30s, lockstep with #1 | play log; **this is what PLAY DURATION aggregates from** | `valid_play_duration` (ms) |
+
+Key facts:
+- `playstatistics` MUST be sent once at play start. Without it the `h5playlog`
+  `valid_play_duration` heartbeats appear dropped — the 2026-09-18 dual-channel
+  (report.json + h5playlog) replay did NOT credit play_duration next day; adding
+  `playstatistics` is the hypothesis under test.
+- `playstatistics` `sig` = **`md5(data + key + "yixiong&zhaolong5")`** — RECOVERED
+  from the weibo-pro-next bundle (`PlayStatistics._md5Log`) and verified 2026-09-21
+  against the 2026-09-18 HAR sig (exact MATCH). Differs from h5playlog ONLY in the
+  salt (`"encryptedString"`). `data` = `JSON.stringify({uid,mid,keys,type,uuid,media_id})`;
+  `key` = `Log_<rand5>_<ts><rand4><count>`. (The server also tolerates a wrong sig —
+  verified — but the correct sig is now used in the probe.) Wired into the quick-play
+  CLI as `--channels triple` (`quick_watch_recent.py`); default stays `dual`.
+- `h5playlog` `sig` = `md5(data+key+"encryptedString")` (verified vs HAR); needs
+  `X-Xsrf-Token` + `x-requested-with: XMLHttpRequest` or it 403s.
+- `report.json` needs neither header.
+
+Implemented in `src/experiment/fetch/quick_watch_delay_probe.py` as the
+TRIPLE-channel replay (report.json + h5playlog + playstatistics); all three
+return 200. play_duration credit is LAGGED to the next day — verify via
+`crawl_video_stats.py` `traffic_7d.play_totallength_sec` for the target vs an
+untouched control video the following day.
