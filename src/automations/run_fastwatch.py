@@ -52,6 +52,11 @@ SRC = os.path.abspath(os.path.join(HERE, '..'))
 sys.path.insert(0, SRC)
 os.chdir(SRC)
 
+import logging
+from logutil import setup as _setup_logging
+_setup_logging()  # shared logging: console -> stdout, rotating file log/weibo.log
+log = logging.getLogger('run_fastwatch')
+
 AUTOMATION_LOG_DIR = os.path.join(SRC, 'log', 'automation')
 os.makedirs(AUTOMATION_LOG_DIR, exist_ok=True)
 LOG = os.path.join(AUTOMATION_LOG_DIR, 'fastwatch_log.jsonl')
@@ -83,7 +88,7 @@ def _preflight_session(viewer_uid):
     try:
         from auth import Auth
     except Exception as e:
-        print('preflight: cannot import auth (%s); aborting.' % e, flush=True)
+        log.error('preflight: cannot import auth (%s); aborting.' % e)
         return False
     try:
         auth = Auth()
@@ -91,18 +96,17 @@ def _preflight_session(viewer_uid):
         auth.load()
         if auth.test_login():
             return True
-        print('preflight: session not logged in; attempting silent SSO renew...',
-              flush=True)
+        log.info('preflight: session not logged in; attempting silent SSO renew...')
         if auth.renew():
-            print('preflight: session renewed.', flush=True)
+            log.info('preflight: session renewed.')
             return True
-        print('preflight: Auth.test_login()=False (session NOT logged in) AND silent '
-              'SSO renew FAILED -- the long-lived viewer credential is spent '
-              '(SSO retcode=6102). A manual QR re-login is required; verify with '
-              '`src/auth.py --user %s --check` then re-login.' % VIEWER_LABEL, flush=True)
+        log.error('preflight: Auth.test_login()=False (session NOT logged in) AND silent '
+                  'SSO renew FAILED -- the long-lived viewer credential is spent '
+                  '(SSO retcode=6102). A manual QR re-login is required; verify with '
+                  '`src/auth.py --user %s --check` then re-login.' % VIEWER_LABEL)
         return False
     except Exception as e:
-        print('preflight: session refresh error (%s); aborting.' % e, flush=True)
+        log.error('preflight: session refresh error (%s); aborting.' % e)
         return False
 
 
@@ -157,7 +161,7 @@ def main():
                '  venvs/weibo-env/Scripts/python.exe src/auth.py --user %s\n'
                'then re-run this automation. No beacons were sent.'
                % VIEWER_LABEL)
-        print(msg, flush=True)
+        log.error(msg)
         rec = {
             'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
             'cycle': 'auto',
@@ -172,7 +176,7 @@ def main():
         }
         with open(LOG, 'a', encoding='utf-8') as f:
             f.write(json.dumps(rec, ensure_ascii=False) + '\n')
-        print(json.dumps(rec, ensure_ascii=False), flush=True)
+        log.info(json.dumps(rec, ensure_ascii=False))
         return 1
 
     start = time.time()
@@ -196,7 +200,7 @@ def main():
     }
     with open(LOG, 'a', encoding='utf-8') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
-    print(json.dumps(rec, ensure_ascii=False), flush=True)
+    log.info(json.dumps(rec, ensure_ascii=False))
     return 0
 
 

@@ -106,7 +106,9 @@ from playback_beacons import (send_playstatistics as _bc_send_playstatistics,
 from logutil import setup as _setup_logging
 _setup_logging()  # idempotent; configures the shared weibo.log for other modules
 # Dedicated logger for THIS script: verbose per-request dumps go to a SEPARATE
-# DAILY file (src/log/watch/quick_watch_YYYYMMDD.log); console stays at INFO.
+# DAILY file (src/log/watch/quick_watch_YYYYMMDD.log) via a FileHandler. Isolation
+# is by log FILE, not by stdout/stderr stream -- so we intentionally attach only a
+# FileHandler here. propagate=False keeps these dumps out of the shared weibo.log.
 log = logging.getLogger('quick_watch')
 log.setLevel(logging.DEBUG)
 log.propagate = False
@@ -121,11 +123,7 @@ if not log.handlers:
         os.path.join(_qw_dir, 'quick_watch_%s.log' % _qw_day), encoding='utf-8')
     _qw_file.setLevel(logging.DEBUG)
     _qw_file.setFormatter(_qw_fmt)
-    _qw_console = logging.StreamHandler()
-    _qw_console.setLevel(logging.INFO)
-    _qw_console.setFormatter(_qw_fmt)
     log.addHandler(_qw_file)
-    log.addHandler(_qw_console)
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VIDEO_DATA = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
