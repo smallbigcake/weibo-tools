@@ -1167,6 +1167,10 @@ def main():
                          'first time; the real UID is captured after the scan.')
     ap.add_argument('--no-prompt', action='store_true',
                     help='Do not prompt; use the only/existing identity or "default".')
+    ap.add_argument('--check', '--test', action='store_true', dest='check',
+                    help='Read-only verification: load cookies and run test_login(); '
+                         'print the login state and exit WITHOUT silent renew or QR '
+                         'login. Use to confirm a session before declaring it spent.')
     args = ap.parse_args()
 
     auth = Auth()
@@ -1174,6 +1178,12 @@ def main():
         # --uid given but no saved session: instruct the user and exit.
         return
     auth.load()
+    if args.check:
+        ok = auth.test_login()
+        now, state = _auth_cookie_state(auth.session.cookies)
+        logging.info('CHECK "%s": test_login()=%s\n  auth-state: %s'
+                     % (auth.uid or auth.label, ok, _fmt_auth_cookie_state(now, state)))
+        return
     if auth.test_login():
         logging.info('Already logged in as "%s".' % (auth.uid or auth.label))
         return
