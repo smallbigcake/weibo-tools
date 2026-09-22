@@ -14,17 +14,21 @@ Algorithms recovered from the weibo-pro-next bundle
                                (PlayStatistics._md5Log; verified EXACT MATCH vs the
                                2026-09-18 HAR sig `b471297e...`)
 
-Only `playstatistics` lives here (the NEWLY recovered one). The h5playlog
-builder stays in `quick_watch_recent.py` (it already had one) to avoid a large
-refactor; both scripts keep their own posting style.
+`playstatistics` and `PC_real_read` (ajax/log/read) live here (both NEWLY
+recovered from the 2026-09-18 HAR). The h5playlog builder stays in
+`quick_watch_recent.py` (it already had one) to avoid a large refactor; both
+scripts keep their own posting style.
 """
 import hashlib
+import json
 import random
 import string
 import time
 
 PLAYSTAT_URL = "https://weibo.com/aj/video/playstatistics?ajwvr=6"
 PLAYSTAT_SALT = "yixiong&zhaolong5"  # PlayStatistics._md5Log salt (NOT "encryptedString")
+
+READ_URL = "https://weibo.com/ajax/log/read"  # PC_real_read endpoint
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -87,6 +91,68 @@ def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5):
                                 "key": (None, key),
                                 "sig": (None, sig)},
                          headers=headers, timeout=20000)
+        status = r.status_code
+        try:
+            j = r.json()
+            ec = j.get("error_code") or j.get("errorCode")
+        except Exception:
+            ec = None
+        return status, ec
+    except Exception as ex:
+        return None, str(ex)
+
+
+def build_read_log(mid, read_ms):
+    """Return the JSON `data` string for ONE PC_real_read beacon.
+
+    Recovered from the 2026-09-18 real-watch HAR: the browser fires
+    `act=PC_real_read` every ~15s while a post/video is on screen, with a
+    CUMULATIVE `read_duration` (ms). For a VIDEO post this read dwell == watch
+    time, so it is the strongest candidate for what the creator-center PLAY
+    DURATION actually aggregates (h5playlog's `valid_play_duration` did NOT
+    credit in the 2026-09-21 triple test). No sig/key; body is
+    {"data": "<json-array-as-string>"}.
+    """
+    rid = "0_0_0_%d_0_0_0" % random.randint(10 ** 18, 10 ** 19 - 1)
+    rec = {
+        "act": "PC_real_read",
+        "itemid": str(mid),
+        "type": "mblog",
+        "rid": rid,
+        "page": 0,
+        "root_id": str(mid),
+        "analysis_extra": "",
+        "ext": "",
+        "PC_real_read": 1,
+        "__date": int(time.time()),
+        "duration": int(read_ms),
+        "read_duration": int(read_ms),
+    }
+    return json.dumps([rec], ensure_ascii=False)
+
+
+def send_read_log(session, mid, read_ms, delay=0.5):
+    """POST one PC_real_read beacon. Returns (http_status, error_code).
+
+    Requires `X-Xsrf-Token` (from the XSRF-TOKEN cookie) + `x-requested-with`
+    like the other weibo.com/ajax/log/* endpoints (else 403).
+    """
+    payload = {"data": build_read_log(mid, read_ms)}
+    xsrf = ""
+    try:
+        xsrf = session.cookies.get("XSRF-TOKEN", domain="weibo.com") or ""
+    except Exception:
+        try:
+            xsrf = session.cookies.get("XSRF-TOKEN") or ""
+        except Exception:
+            xsrf = ""
+    headers = {"User-Agent": UA,
+               "Referer": "https://weibo.com/",
+               "x-requested-with": "XMLHttpRequest"}
+    if xsrf:
+        headers["X-Xsrf-Token"] = xsrf
+    try:
+        r = session.post(READ_URL, json=payload, headers=headers, timeout=20000)
         status = r.status_code
         try:
             j = r.json()

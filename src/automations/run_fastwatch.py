@@ -96,9 +96,10 @@ def _preflight_session(viewer_uid):
         if auth.renew():
             print('preflight: session renewed.', flush=True)
             return True
-        print('preflight: silent SSO renew FAILED -- the long-lived viewer '
-              'credential is spent (SSO retcode=6102). A manual QR re-login is '
-              'required before this automation can report playback.', flush=True)
+        print('preflight: Auth.test_login()=False (session NOT logged in) AND silent '
+              'SSO renew FAILED -- the long-lived viewer credential is spent '
+              '(SSO retcode=6102). A manual QR re-login is required; verify with '
+              '`src/auth.py --user %s --check` then re-login.' % VIEWER_LABEL, flush=True)
         return False
     except Exception as e:
         print('preflight: session refresh error (%s); aborting.' % e, flush=True)
@@ -120,9 +121,11 @@ def main():
                          '(default 30)')
     ap.add_argument('--repeat', type=int, default=1,
                     help='repeat the beacon sequence this many times per video')
-    ap.add_argument('--channels', choices=['single', 'dual', 'triple'], default='dual',
+    ap.add_argument('--channels', choices=['single', 'dual', 'triple', 'quad'],
+                    default='dual',
                     help='playback beacon channels forwarded to quick_watch_recent.py '
-                         '(default dual; triple adds playstatistics at each video start)')
+                         '(default dual; triple adds playstatistics once per video start; '
+                         'quad adds PC_real_read every heartbeat)')
     ap.add_argument('--dry-run', action='store_true',
                     help='only count videos/requests, send nothing')
     args = ap.parse_args()

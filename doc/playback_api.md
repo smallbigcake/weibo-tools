@@ -218,27 +218,33 @@ _WRITE_ beacons (discovered from the 2026-09-18 watch HAR under `src/tmp/video/`
 | # | Endpoint | Method | When | Purpose | Watch-time field |
 |---|---|---|---|---|---|
 | 1 | `multimedia.api.weibo.com/2/multimedia/user/play_history/report.json` | POST | ~30s `seconds` heartbeat | watch-history / play_count progress | `seconds` |
-| 2 | `weibo.com/aj/video/playstatistics?ajwvr=6` | POST (multipart) | ONCE per video, at play start | **play-start registration** — the missing piece | — (no duration) |
-| 3 | `weibo.com/ajax/log/h5playlog` | POST (multipart) | ~30s, lockstep with #1 | play log; **this is what PLAY DURATION aggregates from** | `valid_play_duration` (ms) |
+| 2 | `weibo.com/aj/video/playstatistics?ajwvr=6` | POST (multipart) | ONCE per video, at play start | **play-start registration** | — (no duration) |
+| 3 | `weibo.com/ajax/log/h5playlog` | POST (multipart) | ~30s, lockstep with #1 | play log (detailed watch telemetry) | `valid_play_duration` (ms) |
+| 4 | `weibo.com/ajax/log/read` | POST (JSON) | ~15s, lockstep with #1 | **`PC_real_read`** — cumulative `read_duration` (ms); for a video this read dwell IS the watch time. STRONGEST candidate for the PLAY DURATION source (h5playlog did NOT credit in the 2026-09-21 triple test) | `read_duration` (ms) |
 
 Key facts:
-- `playstatistics` MUST be sent once at play start. Without it the `h5playlog`
-  `valid_play_duration` heartbeats appear dropped — the 2026-09-18 dual-channel
-  (report.json + h5playlog) replay did NOT credit play_duration next day; adding
-  `playstatistics` is the hypothesis under test.
-- `playstatistics` `sig` = **`md5(data + key + "yixiong&zhaolong5")`** — RECOVERED
-  from the weibo-pro-next bundle (`PlayStatistics._md5Log`) and verified 2026-09-21
-  against the 2026-09-18 HAR sig (exact MATCH). Differs from h5playlog ONLY in the
-  salt (`"encryptedString"`). `data` = `JSON.stringify({uid,mid,keys,type,uuid,media_id})`;
-  `key` = `Log_<rand5>_<ts><rand4><count>`. (The server also tolerates a wrong sig —
-  verified — but the correct sig is now used in the probe.) Wired into the quick-play
-  CLI as `--channels triple` (`quick_watch_recent.py`); default stays `dual`.
+- `playstatistics` MUST be sent once at play start. `sig` = **`md5(data + key +
+  "yixiong&zhaolong5")`** — RECOVERED from the weibo-pro-next bundle
+  (`PlayStatistics._md5Log`) and verified 2026-09-21 against the 2026-09-18 HAR sig
+  (exact MATCH). Differs from h5playlog ONLY in the salt (`"encryptedString"`).
+  `data` = `JSON.stringify({uid,mid,keys,type,uuid,media_id})`;
+  `key` = `Log_<rand5>_<ts><rand4><count>`.
 - `h5playlog` `sig` = `md5(data+key+"encryptedString")` (verified vs HAR); needs
   `X-Xsrf-Token` + `x-requested-with: XMLHttpRequest` or it 403s.
+- `read` (`PC_real_read`): body `{"data": "<json-array-as-string>"}` with one record
+  `{act:"PC_real_read", itemid:<mid>, type:"mblog", rid:"0_0_0_<id>_0_0_0",
+  root_id:<mid>, PC_real_read:1, __date:<ts>, duration:<ms>, read_duration:<ms>}`,
+  `read_duration` = CUMULATIVE watched ms (no sig/key; needs the same `X-Xsrf-Token`
+  + `x-requested-with` CSRF header). Recovered from the 2026-09-18 HAR.
 - `report.json` needs neither header.
+- 2026-09-21 verdict: the TRIPLE run (report.json + h5playlog + playstatistics) did
+  NOT credit creator-center play_duration (09-21 = 11.26h vs 09-20 baseline 8.64h,
+  only +2.62h, organic-scale). `read` (PC_real_read) is therefore added as the 4th
+  channel (`--channels quad`) — the highest-coverage attempt to credit PLAY DURATION.
+  Still UNVERIFIED (live run blocked 2026-09-22 by a spent viewer SSO credential).
 
-Implemented in `src/experiment/fetch/quick_watch_delay_probe.py` as the
-TRIPLE-channel replay (report.json + h5playlog + playstatistics); all three
-return 200. play_duration credit is LAGGED to the next day — verify via
-`crawl_video_stats.py` `traffic_7d.play_totallength_sec` for the target vs an
-untouched control video the following day.
+Implemented as the multi-channel replay in `quick_watch_recent.py`
+(`--channels single|dual|triple|quad`; default `dual`). `quad` = report.json +
+h5playlog + playstatistics + `read`, all returning 200 in dry-run. play_duration
+credit is LAGGED to the next day — verify via `read_backend_aggregate.py`
+`play_dura_count` (account-level yesterday) the following day.

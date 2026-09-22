@@ -7,23 +7,26 @@ Playback-report CHANNELS, selectable with --channels
 --------------------------------------------------------------------------
 The old `quick_watch_recent.py` only emitted CHANNEL 1 (play_history/report.json),
 the `seconds` heartbeat. A real 2026-09-18 watch HAR shows the browser actually
-fires THREE report channels while watching:
+fires FOUR report channels while watching:
 
   1. play_history/report.json  (GET, ?seconds=N)   -- playback progress / play count
   2. ajax/log/h5playlog         (POST FormData)     -- detailed play log carrying
-     `valid_play_duration` (ms). This is the ONLY channel that reports the *valid*
-     watched time, which is what the creator-center PLAY DURATION aggregates.
+     `valid_play_duration` (ms).
   3. aj/video/playstatistics?ajwvr=6 (POST FormData, ONCE at play start) -- play-start
-     registration. Without it the h5playlog duration heartbeats appear dropped (the
-     missing piece behind "duration never moves"). sig = md5(data+key+
-     "yixiong&zhaolong5"), recovered 2026-09-21 from the weibo-pro-next bundle.
+     registration. sig = md5(data+key+"yixiong&zhaolong5"), recovered 2026-09-21
+     from the weibo-pro-next bundle.
+  4. ajax/log/read (POST JSON, ~every 15s) -- `PC_real_read` with CUMULATIVE
+     `read_duration` (ms). For a video this read dwell == watch time; the strongest
+     candidate for what the creator-center PLAY DURATION actually aggregates
+     (h5playlog `valid_play_duration` did NOT credit in the 2026-09-21 triple test).
 
 `--channels single`  -> CHANNEL 1 only (legacy FastWatch).
 `--channels dual`    -> CHANNELS 1+2, INTERLEAVED per heartbeat (report.json first,
                         then h5playlog). DEFAULT.
 `--channels triple`  -> CHANNELS 1+2+3: dual, PLUS playstatistics ONCE at each video's
-                        start (the full real-player sequence). Use to test whether the
-                        creator-center PLAY DURATION finally credits.
+                        start (the full real-player sequence).
+`--channels quad`    -> CHANNELS 1+2+3+4: triple, PLUS PC_real_read every heartbeat.
+                        Highest-coverage attempt to credit creator-center PLAY DURATION.
 
 The `h5playlog` (ajax/*) POST requires the CSRF header `X-Xsrf-Token` (from the
 `XSRF-TOKEN` cookie) + `x-requested-with: XMLHttpRequest`, else it returns 403.
@@ -67,7 +70,7 @@ All numbers are CLI-configurable (see --help).
 Usage:
   venvs/weibo-env/Scripts/python.exe src/experiment/fetch/quick_watch_recent.py \
       [--days 30] [--rounds 10] [--delay 1.0] [--cadence 30] \
-      [--channels single|dual|triple] [--mid <mid>] \
+      [--channels single|dual|triple|quad] [--mid <mid>] \
       [--with-aggregate] [--dry-run]
 """
 import os as _os
@@ -98,7 +101,8 @@ _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, _src_root)
 
 from auth import Auth
-from playback_beacons import send_playstatistics as _bc_send_playstatistics
+from playback_beacons import (send_playstatistics as _bc_send_playstatistics,
+                              send_read_log as _bc_send_read_log)
 from logutil import setup as _setup_logging
 _setup_logging()  # idempotent; configures the shared weibo.log for other modules
 # Dedicated logger for THIS script: verbose per-request dumps go to a SEPARATE
@@ -546,6 +550,17 @@ def _post_playstatistics_step(session, mid, media_id, results):
             status=status, error_code=ec)
 
 
+def _post_read_step(session, mid, read_ms, results):
+    """CHANNEL 4: one `ajax/log/read` (PC_real_read) beacon, read_duration = cumulative
+    watched ms. Recovered from the 2026-09-18 HAR; the strongest candidate for the
+    creator-center PLAY DURATION source (h5playlog `valid_play_duration` did NOT credit
+    in the 2026-09-21 triple test). No sig/key; body is {"data": "<array-string>"}."""
+    status, ec = _bc_send_read_log(session, mid, read_ms)
+    log.info("  [read] mid=%s read_ms=%d -> %s err=%s"
+             % (mid, read_ms, status, ec))
+    _record(results, "read", mid=mid, read_ms=read_ms, status=status, error_code=ec)
+
+
 def replay_one(session, mid, oid, duration, seq, delay, play_time, results, channels):
     """Replay ONE video.
     * single -> report.json only, every heartbeat.
@@ -553,18 +568,23 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
     * triple -> dual PLUS playstatistics ONCE at the video's start (the full
                 real-player sequence: report(play_type=0) + playstatistics +
                 h5playlog fire together at start, then report+h5playlog every
-                heartbeat)."""
+                heartbeat).
+    * quad   -> triple PLUS PC_real_read (ajax/log/read) every heartbeat; the
+                highest-coverage attempt to credit creator-center PLAY DURATION."""
     media_id = (oid or "").split(":")[-1]
-    if channels == "triple":
+    if channels in ("triple", "quad"):
         if media_id:
             _post_playstatistics_step(session, mid, media_id, results)
         else:
-            log.warning("  [triple] skip playstatistics (no media_id from oid=%s)", oid)
+            log.warning("  [%s] skip playstatistics (no media_id from oid=%s)", channels, oid)
+    full = int(round(duration or 0))
     for i, (play_type, sec) in enumerate(seq):
         _post_report_step(session, mid, oid, duration, play_type, sec, results)
-        if channels in ("dual", "triple"):
+        if channels in ("dual", "triple", "quad"):
             _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
                                  play_time, i == len(seq) - 1, results)
+        if channels == "quad":
+            _post_read_step(session, mid, int(min(sec, full) * 1000), results)
         time.sleep(delay)
 
 
@@ -642,7 +662,7 @@ def _viewer_session():
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Unified FastWatch: single or dual playback-report channels "
+        description="Unified FastWatch: single/dual/triple/quad playback-report channels "
                     "(--channels), pace via --delay, live PLAY COUNT / PLAY DURATION.")
     ap.add_argument("--days", type=int, default=30,
                     help="only videos published in the last N days")
@@ -661,10 +681,13 @@ def main():
     ap.add_argument("--limit", type=int, default=0,
                     help="watch only the newest N videos in the window (0 = all)")
     # --- merged dual-channel capability ---
-    ap.add_argument("--channels", choices=["single", "dual", "triple"], default="dual",
+    ap.add_argument("--channels", choices=["single", "dual", "triple", "quad"],
+                    default="dual",
                     help="single = report.json only (legacy); dual = report.json + "
                          "h5playlog, interleaved per heartbeat (DEFAULT); triple = "
-                         "dual + playstatistics ONCE per video start")
+                         "dual + playstatistics ONCE per video start; quad = triple + "
+                         "PC_real_read (ajax/log/read) per heartbeat (candidate PLAY "
+                         "DURATION source)")
     ap.add_argument("--mid", default=None,
                     help="target video mid; if omitted, play EVERY video in the window")
     ap.add_argument("--max-dur", type=float, default=120.0,
@@ -697,7 +720,9 @@ def main():
         total_req = 0
         for i, v in enumerate(videos, 1):
             seq = build_sequence(v.get("duration"), args.cadence)
-            if channels == "triple":
+            if channels == "quad":
+                per_video = len(seq) * 3 + 1   # report+h5playlog+read per hb, +1 playstatistics
+            elif channels == "triple":
                 per_video = len(seq) * 2 + 1   # +1 playstatistics (once per video)
             elif channels == "dual":
                 per_video = len(seq) * 2
