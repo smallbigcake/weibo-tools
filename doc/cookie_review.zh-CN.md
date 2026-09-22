@@ -27,6 +27,66 @@ ADDED / REMOVED / CHANGED 的 cookie。
 登录判定（依据 `test_login` / `get_config`）：`SUB` 存在**且** `ALF` 未过期。
 `WBPSESS` **不参与**登录判定。
 
+## 认证会话恢复架构（重构 —— 2026-09-22）
+
+所有登录 / 恢复逻辑已统一到唯一入口：
+
+    Auth.ensure_session(force=False, allow_renew=True) -> bool
+
+会话可用时返回 `True`。恢复顺序：
+
+1. `test_login()` —— 已经登录？(当 `force=True` 时跳过此步)。
+2. `renew()` —— 静默 SSO 续期，**无需扫码**（当 `allow_renew=False` 时跳过）。
+3. `login()` —— 完整二维码登录（最后手段；阻塞在二维码窗口直到被扫码）。
+
+`Session.login()` 与爬取层现在都委托给 `ensure_session()`，而不是各自重写
+"test → renew → login" 那套流程（提交 `0224aaf`，分支 `refactor/auth-ensure-session`）。
+
+### `force` 与 `allow_renew` —— 两个独立的开关
+
+- `force` 只控制**第 1 步**：为 `True` 时跳过开头的"已登录"短路，即使
+  `test_login()` 已通过也会继续恢复（用于强制重新认证）。
+- `allow_renew` 只控制**第 2 步**：为 `False` 时跳过静默 `renew()`，直接走二维码。
+
+  **注意：`force=True` 并不会禁用 `renew()`。** 续期只受 `allow_renew` 控制——
+  因此 `force=True, allow_renew=True` 在二维码**之前**仍会先尝试静默续期。
+
+| `force` | `allow_renew` | 行为 |
+|---------|---------------|------|
+| `False`（默认） | `True`（默认） | test → renew → QR（常规自动恢复） |
+| `False` | `False` | test → QR（跳过续期） |
+| `True` | `True` | renew → QR（跳过开头 test，但仍先尝试续期） |
+| `True` | `False` | 仅 QR（强制重新扫码；不 test、不续期） |
+
+### `renew()` 机制（静默、免扫码）
+
+模拟浏览器在 `.weibo.com` 的 `SUB` 缺失 / 短期失效时访问 `weibo.com/`：
+
+1. `GET weibo.com/`（`allow_redirects=False`）。
+   - **200** → 已完全登录；`test_login()` 确认后 `renew()` 返回 `True`。
+     **不会调用任何 SSO 接口**（仅做确认，等于 no-op）。
+   - **301/302** 且 `Location` 含 `login.php` → 服务器下发了自动登录 URL
+     （`login.php?...&useticket=1`）。
+2. 跟随该**服务器下发**的 `login.php` URL（`_follow_sso_chain`）：重放跨域链
+   （`login.sina.com.cn/sso/v2/crossdomain` →
+   `passport.weibo.cn/sso/crossdomain` → `pmproxy`），通过 `Set-Cookie` 重签
+   `SUB/ALF/SCF/ALC`。以长期 `SCF`（加密 TGT）作为凭证。
+   - 301/302 → 跟完链 → `test_login()` 通过 → `renew()` 返回 `True`。
+   - 其他情况 → `renew()` 返回 `False`（SSO TGT 失效，例如 `retcode=6102`）；
+     调用方退化到二维码。
+
+该流程的实证 HAR 证据见下方任务 2B / 2C。
+
+### 运维 CLI（`src/auth.py`）
+
+- `auth.py --user <label>`（无 flag）：默认 `main()` 执行同样的
+  **test → renew → QR** 顺序且不做任何播放 —— 即"只（重新）认证"。
+- `--check` / `--test`（只读）：载入 cookie、`test_login()`、打印认证 cookie
+  状态后退出。**不续期、不扫码**。位于 `refactor/auth-ensure-session` 分支
+  （提交 `4d0fed2`）。
+- `--login`（强制二维码 flag）已**删除**：在 `ensure_session` 成为规范入口后，
+  无 flag 的 `auth.py --user <label>` 已覆盖强制恢复场景，故该 flag 冗余。
+
 ---
 
 ## 任务 1 —— 让 `WBPSESS` 过期（从会话中删除），找出重新下发者

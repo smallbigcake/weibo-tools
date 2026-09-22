@@ -28,6 +28,71 @@ request and prints ADDED / REMOVED / CHANGED cookies.
 Login gate (per `test_login` / `get_config`): `SUB` present **and** `ALF` not
 expired. `WBPSESS` is **not** part of the login gate.
 
+## Auth session-recovery architecture (refactor — 2026-09-22)
+
+All login / recovery logic was consolidated into one canonical entry point:
+
+    Auth.ensure_session(force=False, allow_renew=True) -> bool
+
+It returns `True` iff a logged-in session is now available. Recovery order:
+
+1. `test_login()` — already logged in? (skipped when `force=True`).
+2. `renew()` — silent SSO renewal, **no QR scan** (skipped when `allow_renew=False`).
+3. `login()` — full QR login (last resort; blocks on the QR window until scanned).
+
+Both `Session.login()` and the crawl layer now delegate to `ensure_session()`
+instead of re-implementing the test → renew → login dance (commit `0224aaf`,
+branch `refactor/auth-ensure-session`).
+
+### `force` vs `allow_renew` — two orthogonal switches
+
+- `force` gates **step 1 only**: when `True`, the initial "already logged in"
+  short-circuit is skipped, so recovery proceeds even if `test_login()` already
+  passes (useful to force a fresh re-auth).
+- `allow_renew` gates **step 2 only**: when `False`, the silent `renew()` is
+  skipped and the flow goes straight to QR.
+
+  **Note: `force=True` does NOT disable `renew()`.** Renewal is controlled solely
+  by `allow_renew` — so `force=True, allow_renew=True` still tries silent renew
+  *before* QR.
+
+| `force` | `allow_renew` | behavior |
+|---------|---------------|----------|
+| `False` (default) | `True` (default) | test → renew → QR (normal auto-recover) |
+| `False` | `False` | test → QR (skip renew) |
+| `True` | `True` | renew → QR (skip initial test, but still tries renew first) |
+| `True` | `False` | QR only (force a fresh scan; no test, no renew) |
+
+### `renew()` mechanics (silent, no QR)
+
+Mirrors a browser hitting `weibo.com/` with a missing / short `.weibo.com` SUB:
+
+1. `GET weibo.com/` (`allow_redirects=False`).
+   - **200** → already fully logged in; `test_login()` confirms and `renew()`
+     returns `True`. **No SSO API is called** (a confirmation no-op).
+   - **301/302** whose `Location` contains `login.php` → the server issued an
+     autologin URL (`login.php?...&useticket=1`).
+2. Follow that **server-issued** `login.php` URL (`_follow_sso_chain`): replays
+   the crossdomain chain (`login.sina.com.cn/sso/v2/crossdomain` →
+   `passport.weibo.cn/sso/crossdomain` → `pmproxy`), re-issuing `SUB/ALF/SCF/ALC`
+   via `Set-Cookie`. Uses the long-lived `SCF` (encrypted TGT) as the credential.
+   - 301/302 → chain followed → `test_login()` passes → `renew()` returns `True`.
+   - anything else → `renew()` returns `False` (SSO TGT spent, e.g.
+     `retcode=6102`); the caller falls back to QR.
+
+Empirical HAR evidence for this flow is in Tasks 2B / 2C below.
+
+### Operator CLI (`src/auth.py`)
+
+- `auth.py --user <label>` (no flags): the default `main()` runs the same
+  **test → renew → QR** order and performs no playback — i.e. "just (re)authenticate".
+- `--check` / `--test` (read-only): load cookies, `test_login()`, print the
+  auth-cookie state, and exit. Does **NOT** renew, does **NOT** QR. Lives on the
+  `refactor/auth-ensure-session` branch (commit `4d0fed2`).
+- `--login` (force-QR flag) was **removed**: after `ensure_session` became the
+  canonical path, no-flag `auth.py --user <label>` already covers force-recovery,
+  so the flag was redundant.
+
 ---
 
 ## Task 1 — Expire `WBPSESS` (deleted from session), find re-issuer
