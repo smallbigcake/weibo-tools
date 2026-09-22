@@ -808,32 +808,41 @@ class Auth(object):
                      f"  auth-state: {_fmt_auth_cookie_state(now, state)}")
         return False
 
-    def ensure_session(self):
+    def ensure_session(self, force=False, allow_renew=True):
         """Auto-recover a live session. Returns True if a logged-in session is
         now available.
 
         Recovery order:
-          1. already logged in? (test_login) — nothing to do.
+          1. already logged in? (test_login) — unless `force`, nothing to do.
           2. silent SSO `renew()` — replays the crossdomain chain with the
              long-lived SCF cookie to re-mint short-term SUB/ALF without any
              QR scan. Covers the common case where only the short-term session
-             cookie expired while the TGT is still valid.
+             cookie expired while the TGT is still valid. Skipped when
+             `allow_renew` is False.
           3. full QR `login()` as a last resort (needs a human scan; in a
              headless run it blocks on the QR window / os.startfile until
              scanned, then resumes).
 
-        This is the hook the crawl layer calls whenever it detects a login
-        failure (ok:-100 / redirect to login.php), so an unattended run keeps
-        going instead of silently producing empty caches.
+        `force=True` skips the initial "already logged in" short-circuit so a
+        fresh QR scan is always performed (used by the operator `--login`
+        command to re-authenticate even a session that still passes
+        test_login). `allow_renew=False` goes straight to QR (the old
+        `Session.login` behaviour).
+
+        This is the single canonical recovery path. Both `Session.login` and
+        the crawl layer call it whenever they detect a login failure
+        (ok:-100 / redirect to login.php), so an unattended run keeps going
+        instead of silently producing empty caches.
         """
-        if self.test_login():
+        if not force and self.test_login():
             return True
-        logging.warning('Session not logged in; attempting silent SSO renew...')
-        if self.renew():
-            logging.info('ensure_session: silent SSO renew succeeded.')
-            return True
-        logging.warning('ensure_session: SSO renew failed (long-term credential '
-                        'likely spent); falling back to QR login (needs a scan).')
+        if allow_renew:
+            logging.warning('Session not logged in; attempting silent SSO renew...')
+            if self.renew():
+                logging.info('ensure_session: silent SSO renew succeeded.')
+                return True
+            logging.warning('ensure_session: SSO renew failed (long-term credential '
+                            'likely spent); falling back to QR login (needs a scan).')
         self.login()
         return self.test_login()
 
