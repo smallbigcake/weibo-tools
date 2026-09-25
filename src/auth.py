@@ -61,9 +61,7 @@ WEIBO_HOME_URL = 'https://weibo.com'
 
 # Global browser User-Agent. A realistic browser UA is required on every
 # request to match the behavior of a real browser session.
-USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-              '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-
+from constants import BROWSER_USER_AGENT as USER_AGENT
 # Visitor (guest) session bootstrap. The guest SUB is obtained from
 # genvisitor2 (returned in the JSONP body, written to .weibo.com by first-party
 # JS in the browser), then the device fingerprint is reported via /sso/bd.

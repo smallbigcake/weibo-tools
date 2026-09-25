@@ -94,8 +94,7 @@ TOPIC_URL = 'https://weibo.com/ajax/profile/topicContent?tabid=231093_-_recently
 # Browser-like User-Agent / client headers, taken from a real Chrome profile
 # page load (HAR captured 2026-09-04). These are required so the server treats
 # the requests as a genuine page view rather than a single API probe.
-_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-       '(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36')
+from constants import BROWSER_USER_AGENT as _UA
 # Pinned client/server version headers captured from a real Chrome profile-page
 # load (HAR, 2026-09-04). Weibo only treats the request as a genuine page view
 # when these are present, so they are KEPT VERBATIM (not randomised or derived

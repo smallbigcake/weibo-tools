@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from auth import Auth
+from constants import BROWSER_USER_AGENT
 from playwright.sync_api import sync_playwright
 EXP = os.path.dirname(os.path.abspath(__file__))
 COOKIE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -56,7 +57,7 @@ def dump_videotab():
     a.load()
     r = a.session.get("https://weibo.com/ajax/profile/getVideoTab",
                       params={"uid": AUTHOR_UID, "cursor": "0"},
-                      headers={"User-Agent": "Mozilla/5.0",
+                      headers={"User-Agent": BROWSER_USER_AGENT,
                                "Referer": "https://weibo.com/%s" % AUTHOR_UID},
                       timeout=20000)
     data = r.json()

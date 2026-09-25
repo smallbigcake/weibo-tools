@@ -34,9 +34,7 @@ VIDEO_URL = (f"https://weibo.com/u/{AUTHOR_UID}?tabtype=newVideo"
 _SRC = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # src/
 COOKIE_PATH = os.path.join(_SRC, "cookies.%s.weibo" % VIEWER_UID)
 OUT_PATH = os.path.join(_SRC, "tmp", "capture", "video_playback_capture.json")
-
-USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-              "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+from constants import BROWSER_USER_AGENT as USER_AGENT
 PLAY_SECONDS = 25  # how long to keep the page open after triggering playback
 
 

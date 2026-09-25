@@ -48,8 +48,7 @@ sys.path.insert(0, os.path.join(SRC_DIR, 'experiment', 'fetch'))
 from auth import Auth
 
 GETVIDEO_URL = "https://weibo.com/ajax/multimedia/getVideoList"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+from constants import BROWSER_USER_AGENT as UA
 CREATOR_REF = "https://weibo.com/creator"
 LOG_PATH = os.path.join(SRC_DIR, "data", "probe", "probe_verify_log.jsonl")
 

@@ -85,12 +85,14 @@ AUTHOR_UID = _CFG.get('author_uid')
 VIEWER_UID = _CFG.get('viewer_uid')
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
 import random
 import sys
 import time
+import uuid
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
 import shutil
@@ -112,18 +114,48 @@ _setup_logging()  # idempotent; configures the shared weibo.log for other module
 log = logging.getLogger('quick_watch')
 log.setLevel(logging.DEBUG)
 log.propagate = False
+_qw_fmt = logging.Formatter(
+    '%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s')
+_qw_dir = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'log', 'watch')
+# Per-batch suffix (timestamp). None => fall back to a DAILY file. Callers that
+# run repeated batches per day (e.g. simulated_watch) call set_log_suffix() once
+# at startup so all beacon dumps land in one batch file instead of interleaving.
+_qw_suffix = None
+
+
+def _qw_log_path():
+    name = _qw_suffix or datetime.now().strftime('%Y%m%d')
+    return os.path.join(_qw_dir, 'quick_watch_%s.log' % name)
+
+
 if not log.handlers:
-    _qw_fmt = logging.Formatter(
-        '%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s')
-    _qw_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'log', 'watch')
-    _qw_day = datetime.now().strftime('%Y%m%d')
-    _qw_file = logging.FileHandler(
-        os.path.join(_qw_dir, 'quick_watch_%s.log' % _qw_day), encoding='utf-8')
+    _qw_file = logging.FileHandler(_qw_log_path(), encoding='utf-8')
     _qw_file.setLevel(logging.DEBUG)
     _qw_file.setFormatter(_qw_fmt)
     log.addHandler(_qw_file)
+
+
+def set_log_suffix(suffix):
+    """Re-point this logger's FileHandler at a per-BATCH file. Call ONCE at
+    startup; rebuilds the handler so any already-added daily handler is replaced
+    and every subsequent beacon dump goes to the batch file."""
+    global _qw_suffix
+    _qw_suffix = suffix
+    path = _qw_log_path()
+    for h in list(log.handlers):
+        if isinstance(h, logging.FileHandler):
+            try:
+                h.close()
+            except Exception:
+                pass
+            log.removeHandler(h)
+    fh = logging.FileHandler(path, encoding='utf-8')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(_qw_fmt)
+    log.addHandler(fh)
+    return path
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VIDEO_DATA = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
@@ -134,11 +166,17 @@ LOG_PATH = os.path.join(WATCH_DIR, "quick_watch_log.json")
 
 REPORT_URL = "https://multimedia.api.weibo.com/2/multimedia/user/play_history/report.json"
 H5PLAYLOG_URL = "https://weibo.com/ajax/log/h5playlog"
+ACTION_URL = "https://weibo.com/ajax/log/action"
+RUM_URL = "https://rum.h5.weibo.cn/intake/v2/rum/events"
 GETVIDEO_URL = "https://weibo.com/ajax/multimedia/getVideoList"
 SOURCE = "339644097"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+from constants import BROWSER_USER_AGENT as UA
 CREATOR_REF = "https://weibo.com/creator"
+# The browser watches the author's profile video tab; every playback beacon's
+# Referer is that page (HAR: https://weibo.com/u/<AUTHOR>?tabtype=newVideo...).
+# A bare "https://weibo.com/" Referer is less faithful and risks the server
+# rejecting the play as not originating from a real video page.
+WATCH_REFERER = "https://weibo.com/u/%s?tabtype=newVideo" % AUTHOR_UID
 PAGE_DELAY = 1.0
 END_CURSORS = {"", "0", "-1"}
 
@@ -398,7 +436,11 @@ def _delta(a, b):
 # Channel 1: play_history/report.json ; Channel 2: ajax/log/h5playlog
 # --------------------------------------------------------------------------
 def req_host_value(mid):
-    return "https://weibo.com/u/%s?tabtype=newVideo&layerid=%s" % (AUTHOR_UID, mid)
+    # Browser reqHost (a query param on report.json, NOT the HTTP Referer):
+    #   https://weibo.com/u/<AUTHOR>?tabtype=newVideo&first_cursor=<mid>&layerid=<mid>
+    # first_cursor and layerid both == the post mid the viewer is watching from.
+    return "https://weibo.com/u/%s?tabtype=newVideo&first_cursor=%s&layerid=%s" % (
+        AUTHOR_UID, mid, mid)
 
 
 def _record(results, endpoint, **fields):
@@ -409,7 +451,15 @@ def _record(results, endpoint, **fields):
 
 
 def _post_report_step(session, mid, oid, duration, play_type, sec, results):
-    """One report.json heartbeat (CHANNEL 1). Records the server response."""
+    """One report.json heartbeat (CHANNEL 1). Records the server response.
+
+    Faithful to the 2026-09-23 waterfall watch HAR. The browser sends:
+      source/play_type/video_orientation/video_duration/id/id_type/oid/seconds
+      PLUS is_contribution=0 and reqHost=<author page url>. `oid` is the FULL
+      "1034:<media_id>" (NOT the type-prefix-only value the old code assumed --
+      that earlier "verified" claim was wrong; the HAR clearly shows the prefix).
+      `seconds` is the watched-seconds (server REQUIRES it, else HTTP 422 / 20359).
+    """
     params = {
         "source": SOURCE,
         "play_type": play_type,
@@ -417,7 +467,7 @@ def _post_report_step(session, mid, oid, duration, play_type, sec, results):
         "video_duration": str(int(round(duration or 0))),
         "id": str(mid),
         "id_type": "0",
-        "oid": oid,
+        "oid": str(oid),
         "is_contribution": "0",
         "reqHost": req_host_value(mid),
         "seconds": str(sec),
@@ -427,7 +477,7 @@ def _post_report_step(session, mid, oid, duration, play_type, sec, results):
     ec = None
     try:
         r = session.post(url, headers={"User-Agent": UA,
-                                        "Referer": "https://weibo.com/"},
+                                        "Referer": req_host_value(mid)},
                          timeout=20000)
         status = r.status_code
         try:
@@ -455,12 +505,21 @@ def _rand5():
 
 
 def build_h5playlog_data(mid, oid, duration, playduration_ms,
-                         valid_play_duration_ms, play_time, quit_status=""):
+                         valid_play_duration_ms, play_time, quit_status="",
+                         sid=None):
     """Build the h5playlog FormData `data` field (semicolon CSV) as the real client
     does. Field order reverse-engineered from the 2026-09-18 HAR; the empty 9th
-    field (index 8) is preserved verbatim. sig = md5(data+key+'encryptedString')."""
+    field (index 8) is preserved verbatim. sig = md5(data+key+'encryptedString').
+
+    CRITICAL (2026-09-24, waterfall HAR): `sid` MUST be STABLE across every
+    heartbeat of ONE watch session. The browser keeps it byte-identical for the
+    whole watch (e.g. "H5_nzbmd_179014459481215234" on all 3 h5playlog beacons).
+    The server aggregates cumulative `valid_play_duration` PER `sid`; a fresh
+    random `sid` per beacon fragments the session and the watch is never
+    credited. Pass a caller-owned `sid` (generated once per video)."""
     ts_ms = int(time.time() * 1000)
-    sid = "H5_%s_%d" % (_rand5(), ts_ms)
+    if sid is None:
+        sid = "H5_%s_%d" % (_rand5(), ts_ms)
     key = "Log_h5play_%s_%d" % (_rand5(), ts_ms)
     values = [
         play_time,                       # 0 play_time (Beijing, set once)
@@ -490,22 +549,25 @@ def build_h5playlog_data(mid, oid, duration, playduration_ms,
 
 
 def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
-                         play_time, is_last, results):
+                         play_time, is_last, results, sid=None):
     """One ajax/log/h5playlog beacon (CHANNEL 2). Records the server response.
 
     valid_play_duration == cumulative watched position (mirrors the browser's
     per-30s send). `is_last` closes the session with quit_status='complete'.
+    `sid` is a STABLE per-watch session id (see build_h5playlog_data) -- pass the
+    same value for every heartbeat of one video.
     """
     full = int(round(duration or 0))
     pos_ms = int(min(sec, full) * 1000)
     quit_status = "complete" if is_last else ""
     data, key, sig = build_h5playlog_data(
-        mid, oid, duration, pos_ms, pos_ms, play_time, quit_status=quit_status)
+        mid, oid, duration, pos_ms, pos_ms, play_time, quit_status=quit_status,
+        sid=sid)
     body = err = None
     ec = None
     xsrf = session.cookies.get("XSRF-TOKEN", domain="weibo.com")
     h5_headers = {"User-Agent": UA,
-                  "Referer": "https://weibo.com/",
+                  "Referer": WATCH_REFERER,
                   "x-requested-with": "XMLHttpRequest"}
     if xsrf:
         h5_headers["X-Xsrf-Token"] = xsrf
@@ -541,25 +603,175 @@ def _post_playstatistics_step(session, mid, media_id, results):
     """CHANNEL 3: one `aj/video/playstatistics?ajwvr=6` beacon at play start.
     Delegates to the shared `playback_beacons.send_playstatistics` (canonical
     algorithm recovered from the weibo-pro-next bundle, verified 2026-09-21)."""
-    status, ec = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, 0.5)
+    status, ec, r = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, 0.5,
+                                            referer=WATCH_REFERER)
     log.info("  [playstats] mid=%s media_id=%s -> %s err=%s"
              % (mid, media_id, status, ec))
+    if r is not None:
+        _log_http(r, 'beacon playstatistics')
     _record(results, "playstatistics", mid=mid, media_id=media_id,
             status=status, error_code=ec)
 
 
-def _post_read_step(session, mid, read_ms, results):
+def _post_read_step(session, mid, read_ms, results, rid=None):
     """CHANNEL 4: one `ajax/log/read` (PC_real_read) beacon, read_duration = cumulative
     watched ms. Recovered from the 2026-09-18 HAR; the strongest candidate for the
     creator-center PLAY DURATION source (h5playlog `valid_play_duration` did NOT credit
-    in the 2026-09-21 triple test). No sig/key; body is {"data": "<array-string>"}."""
-    status, ec = _bc_send_read_log(session, mid, read_ms)
-    log.info("  [read] mid=%s read_ms=%d -> %s err=%s"
-             % (mid, read_ms, status, ec))
-    _record(results, "read", mid=mid, read_ms=read_ms, status=status, error_code=ec)
+    in the 2026-09-21 triple test). No sig/key; body is {"data": "<array-string>"}.
+
+    `rid` is a STABLE per-watch session id (see playback_beacons.build_read_log) --
+    pass the same value for every heartbeat of one video so the server aggregates
+    the cumulative read_duration into a single credited watch.
+    """
+    status, ec, r = _bc_send_read_log(session, mid, read_ms, rid=rid,
+                                  referer=WATCH_REFERER)
+    log.info("  [read] mid=%s read_ms=%d rid=%s -> %s err=%s"
+             % (mid, read_ms, (rid or "?"), status, ec))
+    if r is not None:
+        _log_http(r, 'beacon read')
+    _record(results, "read", mid=mid, read_ms=read_ms, rid=rid,
+            status=status, error_code=ec)
 
 
-def replay_one(session, mid, oid, duration, seq, delay, play_time, results, channels):
+def _post_action_step(session, act_code, uicode, ext, results, label=None):
+    """CHANNEL 5 (NEW, 2026-09-25): one `ajax/log/action` EXPOSURE beacon.
+
+    Recovered from weibo-video-watch-waterfall-2026-09-23.har, where the real
+    browser fires FOUR of these at PAGE LOAD -- BEFORE any playback beacon:
+        * act_code=4288  uicode=20000366  ext=staruid:<author>|loginuid:<viewer>
+          (the viewer landed on the author's profile/video page)
+        * act_code=7165  uicode=20000393  ext=vuid:<author>|welfare:0   (x3,
+          the watched video item being exposed in the feed)
+    These are the organic "view / exposure" anchors. Without them the server
+    has no proof a real human opened the page, and the play/read/report
+    progress is NOT credited (the 2026-09-24 simulated watch, which omitted
+    action entirely, was never counted in creator-center play_dura_count).
+    GET, query-only, no body/sig. `t` = ms epoch.
+
+    Fire the profile-expose (4288) once and the video-expose (7165) once per
+    watch, inside the burst that precedes the playback beacons."""
+    params = {
+        "type": "pic",
+        "uicode": str(uicode),
+        "act_code": str(act_code),
+        "ext": ext,
+        "t": str(int(time.time() * 1000)),
+    }
+    url = ACTION_URL + "?" + urlencode(params)
+    status = err = None
+    ec = None
+    try:
+        r = session.get(url,
+                        headers={"User-Agent": UA,
+                                 "Accept": "application/json, text/plain, */*",
+                                 "Referer": WATCH_REFERER,
+                                 "x-requested-with": "XMLHttpRequest"},
+                        timeout=20000)
+        status = r.status_code
+        try:
+            j = r.json()
+            ec = j.get("error_code") or j.get("errorCode")
+        except Exception:
+            # Endpoint falls back to a 1x1 tracking-pixel PNG when the client
+            # Accept header lacks application/json (content negotiation). The
+            # action is still logged server-side, but we match the browser so we
+            # get the real {"ok":1} JSON response. Treat pixel fallback as non-fatal.
+            ec = "pixel-fallback"
+        log.info("  [action] act_code=%s uicode=%s -> %s err=%s"
+                 % (act_code, uicode, status, ec))
+        _log_http(r, 'beacon action')
+    except Exception as ex:
+        status, err = None, str(ex)
+        log.warning("  [action] act_code=%s -> ERROR %s" % (act_code, ex))
+    _record(results, "action", act_code=act_code, uicode=uicode,
+            status=status, error_code=ec, error=err)
+
+
+# --------------------------------------------------------------------------
+# RUM (Real User Monitoring) beacon -- CHANNEL 6 (NEW, 2026-09-25, "to be safe")
+# --------------------------------------------------------------------------
+# Faithful NDJSON batch (application/x-ndjson, gzip) to rum.h5.weibo.cn, exactly
+# as the real weibo-pro-next client emits. The browser sends a `metadata` line
+# followed by one `transaction` per page-load / XHR (27 of them in the
+# 2026-09-23 waterfall HAR). We replicate: one `page-load` transaction at watch
+# start, then one `http-request` transaction per heartbeat (summarizing that
+# tick's beacon round). Response is 202 Accepted; it is pure telemetry, but we
+# emit it for fidelity so the server sees a genuine client session.
+_RUM_METADATA = {
+    "metadata": {
+        "service": {
+            "name": "AppVue3",
+            "agent": {"name": "rum-js", "version": "5.17.0"},
+            "language": {"name": "javascript"},
+            "environment": "development",
+        }
+    }
+}
+
+
+def _rum_transaction(kind, name, duration_ms, url=None, outcome=None):
+    """Build one RUM `transaction` event dict (page-load or http-request)."""
+    tx = {
+        "transaction": {
+            "id": uuid.uuid4().hex[:16],
+            "trace_id": uuid.uuid4().hex,
+            "name": name,
+            "type": kind,
+            "duration": int(duration_ms),
+            "context": {
+                "page": {
+                    "referer": "",
+                    "url": url or ("https://weibo.com/u/%s?tabtype=newVideo" % AUTHOR_UID),
+                },
+                "user": {"id": int(VIEWER_UID)},
+            },
+            "span_count": {"started": 0},
+            "sampled": False,
+            "sample_rate": 0,
+        }
+    }
+    if outcome is not None:
+        tx["transaction"]["outcome"] = outcome
+    if kind == "page-load":
+        tx["transaction"]["context"]["response"] = {
+            "transfer_size": 3320, "encoded_body_size": 3020, "decoded_body_size": 7475,
+        }
+    return tx
+
+
+def _post_rum_step(session, transactions, results, label=None):
+    """POST one RUM NDJSON batch (metadata + transactions), gzip-compressed.
+
+    `transactions` is a list of transaction dicts from `_rum_transaction`."""
+    lines = [json.dumps(_RUM_METADATA, ensure_ascii=False)]
+    for t in transactions:
+        lines.append(json.dumps(t, ensure_ascii=False))
+    ndjson = "\n".join(lines) + "\n"
+    body = gzip.compress(ndjson.encode("utf-8"))
+    headers = {
+        "User-Agent": UA,
+        "Referer": "https://weibo.com/",
+        "Origin": "https://weibo.com",
+        "Content-Type": "application/x-ndjson",
+        "Content-Encoding": "gzip",
+        "Accept": "*/*",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+    status = err = None
+    try:
+        r = session.post(RUM_URL, data=body, headers=headers, timeout=20000)
+        status = r.status_code
+        log.info("  [rum] %s -> %s" % (label or "", status))
+        _log_http(r, 'rum events')
+    except Exception as ex:
+        status, err = None, str(ex)
+        log.warning("  [rum] %s -> ERROR %s" % (label or "", ex))
+    _record(results, "rum", label=label, status=status, error=err)
+
+
+def replay_one(session, mid, oid, duration, seq, delay, play_time, results, channels,
+               rid=None):
     """Replay ONE video.
     * single -> report.json only, every heartbeat.
     * dual   -> report.json THEN h5playlog, interleaved per heartbeat.
@@ -568,8 +780,34 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
                 h5playlog fire together at start, then report+h5playlog every
                 heartbeat).
     * quad   -> triple PLUS PC_real_read (ajax/log/read) every heartbeat; the
-                highest-coverage attempt to credit creator-center PLAY DURATION."""
+                highest-coverage attempt to credit creator-center PLAY DURATION.
+
+    A single watch session gets ONE stable `sid` (h5playlog) and ONE stable
+    `rid` (PC_real_read), reused for every heartbeat -- the browser keeps both
+    byte-identical across the whole watch, and the server aggregates cumulative
+    play/read duration PER (sid, rid). Randomizing them per beacon (the old
+    behavior) fragmented the session and was never credited (2026-09-24).
+
+    `rid` is the post's read-log id (PC_real_read); when available it is the
+    REAL value sourced from the profile waterfall feed ("<pos>_0_0_<pageId>_0_0_0").
+    When None it falls back to a stable random value, still constant for the
+    whole watch."""
     media_id = (oid or "").split(":")[-1]
+    sid = "H5_%s_%d" % (_rand5(), int(time.time() * 1000))
+    if rid is None:
+        rid = "0_0_0_%d_0_0_0" % random.randint(10 ** 18, 10 ** 19 - 1)
+    # CHANNEL 5 (action exposure): fire at page load, BEFORE the playback beacons
+    # (the real browser does this; without it the watch is never credited).
+    log.info("  [burst] action(4288 profile) + action(7165 video)")
+    _post_action_step(session, "4288", "20000366",
+                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID), results)
+    _post_action_step(session, "7165", "20000393",
+                     "vuid:%s|welfare:0" % AUTHOR_UID, results)
+    # CHANNEL 6 (RUM): one page-load transaction at session start (the browser's
+    # first rum event), for client-session fidelity.
+    _post_rum_step(session,
+                   [_rum_transaction("page-load", "/u/:id", 1500)],
+                   results, label="page-load")
     if channels in ("triple", "quad"):
         if media_id:
             _post_playstatistics_step(session, mid, media_id, results)
@@ -580,9 +818,16 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
         _post_report_step(session, mid, oid, duration, play_type, sec, results)
         if channels in ("dual", "triple", "quad"):
             _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
-                                 play_time, i == len(seq) - 1, results)
+                                 play_time, i == len(seq) - 1, results, sid=sid)
         if channels == "quad":
-            _post_read_step(session, mid, int(min(sec, full) * 1000), results)
+            _post_read_step(session, mid, int(min(sec, full) * 1000), results, rid=rid)
+        # CHANNEL 6 (RUM): one http-request transaction per heartbeat (summarizing
+        # this tick's beacon round), mirroring the browser's per-XHR rum sends.
+        _post_rum_step(session,
+                       [_rum_transaction("http-request", "watch heartbeat %d" % i,
+                                         int((delay or 1) * 1000) or 50,
+                                         outcome="success")],
+                       results, label="hb%d" % i)
         time.sleep(delay)
 
 
@@ -760,6 +1005,24 @@ def main():
     total_watch_seconds = 0.0
     all_log = []
 
+    # Source the REAL read-log rid per video from the author's profile waterfall
+    # feed (getVideoList does NOT carry it). The browser's PC_real_read uses the
+    # post's `rid` ("<pos>_0_0_<pageId>_0_0_0"); reusing the real value keeps the
+    # beacon faithful instead of a synthetic random one.
+    try:
+        from simulated_watch import fetch_waterfall_page as _fwf
+        _rid_map = {}
+        _fw_items, _ = _fwf(sess, AUTHOR_UID)   # cursor defaults to "0"
+        for _it in _fw_items:
+            if isinstance(_it, dict) and _it.get("mid") and _it.get("rid"):
+                _rid_map[_it["mid"]] = _it["rid"]
+        for _v in videos:
+            _v.setdefault("rid", _rid_map.get(_v["mid"]))
+        log.info("sourced real rid for %d/%d videos from waterfall",
+                 sum(1 for _v in videos if _v.get("rid")), len(videos))
+    except Exception as _ex:
+        log.warning("failed to source rid map from waterfall: %s", _ex)
+
     def replay_video_entry(v, tag):
         """Replay one video (channels-aware); return True if all sends succeeded."""
         nonlocal total_watch_seconds
@@ -777,7 +1040,7 @@ def main():
         for _ in range(args.repeat):
             before = len(results)
             replay_one(sess, mid, oid, dur, seq, args.delay, play_time,
-                       results, channels)
+                       results, channels, rid=v.get("rid"))
             sent = results[before:]
             if not all(s.get("status") == 200 for s in sent):
                 good = False

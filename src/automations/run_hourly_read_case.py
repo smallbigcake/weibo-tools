@@ -52,8 +52,7 @@ DETAIL = 'https://weibo.com/%s/%s' % (AUTHOR_UID, CASE_MB)
 VIEWER_COOKIE_FILE = os.path.join(SRC, 'cookies.%s.weibo' % VIEWER_UID)
 # Observation output is a log, so it lives with the other runtime logs.
 LOG = os.path.join(SRC, 'log', 'automation', 'hourly_read_case.jsonl')
-UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+from constants import BROWSER_USER_AGENT as UA
 H_JSON = {'User-Agent': UA, 'Accept': 'application/json, text/plain, */*',
           'Referer': 'https://weibo.com/', 'x-requested-with': 'XMLHttpRequest'}
 

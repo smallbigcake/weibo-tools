@@ -29,10 +29,7 @@ PLAYSTAT_URL = "https://weibo.com/aj/video/playstatistics?ajwvr=6"
 PLAYSTAT_SALT = "yixiong&zhaolong5"  # PlayStatistics._md5Log salt (NOT "encryptedString")
 
 READ_URL = "https://weibo.com/ajax/log/read"  # PC_real_read endpoint
-
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
+from constants import BROWSER_USER_AGENT as UA
 # faithful replica of PlayStatistics._logKey()'s `count++`
 _PS_COUNT = [0]
 
@@ -65,8 +62,11 @@ def build_playstatistics(mid, media_id, viewer_uid):
     return data, key, sig
 
 
-def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5):
-    """POST the playstatistics beacon ONCE. Returns (http_status, error_code).
+def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5, referer=None):
+    """POST the playstatistics beacon ONCE. Returns (http_status, error_code, response).
+
+    `referer` defaults to a bare "https://weibo.com/"; callers pass the real
+    watch page for fidelity.
 
     Requires `X-Xsrf-Token` (from the XSRF-TOKEN cookie) + `x-requested-with`.
     The server tolerates a wrong sig, but we send the EXACT correct one.
@@ -81,7 +81,7 @@ def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5):
         except Exception:
             xsrf = ""
     headers = {"User-Agent": UA,
-               "Referer": "https://weibo.com/",
+               "Referer": referer or "https://weibo.com/",
                "x-requested-with": "XMLHttpRequest"}
     if xsrf:
         headers["X-Xsrf-Token"] = xsrf
@@ -97,12 +97,12 @@ def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5):
             ec = j.get("error_code") or j.get("errorCode")
         except Exception:
             ec = None
-        return status, ec
+        return status, ec, r
     except Exception as ex:
-        return None, str(ex)
+        return None, str(ex), None
 
 
-def build_read_log(mid, read_ms):
+def build_read_log(mid, read_ms, rid=None):
     """Return the JSON `data` string for ONE PC_real_read beacon.
 
     Recovered from the 2026-09-18 real-watch HAR: the browser fires
@@ -112,8 +112,17 @@ def build_read_log(mid, read_ms):
     DURATION actually aggregates (h5playlog's `valid_play_duration` did NOT
     credit in the 2026-09-21 triple test). No sig/key; body is
     {"data": "<json-array-as-string>"}.
+
+    CRITICAL (2026-09-24, waterfall HAR): `rid` MUST be STABLE across every
+    heartbeat of ONE watch session. The browser keeps it byte-identical for the
+    whole watch (e.g. "0_0_0_5246141095656271609_0_0_0" on all 5 periodic
+    reads). The server aggregates cumulative `read_duration` PER `rid`; a fresh
+    random `rid` per beacon fragments the session into many 30s stubs and the
+    watch is never credited. Pass a caller-owned `rid` (generated once per
+    video) to fix this.
     """
-    rid = "0_0_0_%d_0_0_0" % random.randint(10 ** 18, 10 ** 19 - 1)
+    if rid is None:
+        rid = "0_0_0_%d_0_0_0" % random.randint(10 ** 18, 10 ** 19 - 1)
     rec = {
         "act": "PC_real_read",
         "itemid": str(mid),
@@ -131,13 +140,19 @@ def build_read_log(mid, read_ms):
     return json.dumps([rec], ensure_ascii=False)
 
 
-def send_read_log(session, mid, read_ms, delay=0.5):
-    """POST one PC_real_read beacon. Returns (http_status, error_code).
+def send_read_log(session, mid, read_ms, rid=None, delay=0.5, referer=None):
+    """POST one PC_real_read beacon. Returns (http_status, error_code, response).
+
+    `rid` is reused for the whole watch session (see build_read_log). Generated
+    once by the caller and threaded through every heartbeat.
+
+    `referer` defaults to a bare "https://weibo.com/"; callers pass the real
+    watch page (https://weibo.com/u/<AUTHOR>?tabtype=newVideo) for fidelity.
 
     Requires `X-Xsrf-Token` (from the XSRF-TOKEN cookie) + `x-requested-with`
     like the other weibo.com/ajax/log/* endpoints (else 403).
     """
-    payload = {"data": build_read_log(mid, read_ms)}
+    payload = {"data": build_read_log(mid, read_ms, rid)}
     xsrf = ""
     try:
         xsrf = session.cookies.get("XSRF-TOKEN", domain="weibo.com") or ""
@@ -147,7 +162,7 @@ def send_read_log(session, mid, read_ms, delay=0.5):
         except Exception:
             xsrf = ""
     headers = {"User-Agent": UA,
-               "Referer": "https://weibo.com/",
+               "Referer": referer or "https://weibo.com/",
                "x-requested-with": "XMLHttpRequest"}
     if xsrf:
         headers["X-Xsrf-Token"] = xsrf
@@ -159,6 +174,6 @@ def send_read_log(session, mid, read_ms, delay=0.5):
             ec = j.get("error_code") or j.get("errorCode")
         except Exception:
             ec = None
-        return status, ec
+        return status, ec, r
     except Exception as ex:
-        return None, str(ex)
+        return None, str(ex), None

@@ -47,9 +47,7 @@ from urllib.parse import urljoin, urlparse, unquote
 import requests
 
 # Browser-like headers: some buckets reject requests without a UA / Referer.
-UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36')
-
+from constants import BROWSER_USER_AGENT as UA
 DEFAULT_EXT = ('js', 'mjs', 'cjs', 'css', 'json', 'map', 'html', 'htm',
                'svg', 'png', 'jpg', 'jpeg', 'gif', 'ico', 'webp',
                'woff', 'woff2', 'ttf', 'eot', 'otf')

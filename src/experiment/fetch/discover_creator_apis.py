@@ -28,10 +28,7 @@ COOKIE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "cookies.%s.weibo" % AUTHOR_UID)
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tmp", "creator", "creator_ajax2.json")
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-
+from constants import BROWSER_USER_AGENT as UA
 def load_cookies():
     with open(COOKIE_PATH, "r", encoding="utf-8") as f:
         raw = json.load(f)

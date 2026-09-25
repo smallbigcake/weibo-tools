@@ -32,10 +32,7 @@ from auth import Auth
 
 MID = "5149990424675345"
 MEDIA_ID = "5149981921968130"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-
+from constants import BROWSER_USER_AGENT as UA
 def post(seconds, play_type="1"):
     base = ("https://multimedia.api.weibo.com/2/multimedia/user/"
             "play_history/report.json")

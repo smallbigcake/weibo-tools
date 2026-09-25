@@ -70,8 +70,7 @@ GETVIDEO_URL = "https://weibo.com/ajax/multimedia/getVideoList"
 PLAYSTAT_URL = "https://weibo.com/aj/video/playstatistics?ajwvr=6"
 H5PLAYLOG_URL = "https://weibo.com/ajax/log/h5playlog"
 SOURCE = "339644097"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+from constants import BROWSER_USER_AGENT as UA
 CREATOR_REF = "https://weibo.com/creator"
 
 
@@ -115,7 +114,7 @@ def send_playstatistics(session, mid, media_id, delay):
     start. Delegates to the shared `playback_beacons.send_playstatistics`
     (canonical algorithm recovered from the weibo-pro-next bundle, verified
     2026-09-21 against the 2026-09-18 HAR sig)."""
-    status, ec = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, delay)
+    status, ec, _r = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, delay)
     print("  playstatistics mid=%s -> %s" % (mid, status))
     return status
 

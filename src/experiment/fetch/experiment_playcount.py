@@ -41,10 +41,7 @@ VIDEO_URL = "https://weibo.com/%s/%s" % (AUTHOR_UID, MID)
 COOKIE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "cookies.%s.weibo" % VIEWER_UID)
-
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
+from constants import BROWSER_USER_AGENT as UA
 COUNT_PATTERNS = [
     r"([\d][\d.]*)\s*(万|亿)?\s*次观看",   # "392次观看" (views)
     r"([\d][\d.]*)\s*(万|亿)?\s*次播放",
