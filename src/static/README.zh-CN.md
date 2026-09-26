@@ -25,11 +25,11 @@ src/static/
 │   │       ├── index-legacy-qIW06_yt.js              # legacy（nomodule）版本
 │   │       ├── polyfills-legacy-a6DDm_QJ.js
 │   │       ├── phone-Y7lal6Xm.png
-│   │       ├── useRoute-Mc4PELCL.js                  # 框架 / 共享 chunk
+│   │       ├── useRoute-bcAylSob.js                  # 框架 / 共享 chunk
 │   │       ├── useRoute-Lc2vcnMQ.css
 │   │       ├── useRoute-legacy-whaJrky6.js
 │   │       └── pages/login/
-│   │           ├── login-ZbqmGudM.js                 # ★ passport 外壳加载的路由 chunk
+│   │           ├── login-LnJ2gZQP.js                 # ★ passport 外壳加载的路由 chunk
 │   │           ├── login-legacy-MItL3eV6.js
 │   │           └── polyfills-legacy-H7cWsSyN.js
 │   ├── m/weibo-pro-next/                             # 当前「专业版」创作者应用（Vue 3，2026-09）
@@ -43,25 +43,28 @@ src/static/
 ├── i.sso.sina.com.cn/
 │   └── js/qrcode_login_v2.js                          # V1 版扫码登录逻辑（文件名误导）
 └── passport.sinaimg.cn/
-    └── js/
-        ├── fp/1.3.2.umd.js                            # 设备指纹 SDK（weibo.com 用，v1.3.2）
-        ├── fp/1.2.1.umd.js                            # 设备指纹 SDK（passport 弹窗用，v1.2.1）
-        └── yidun/v1/yidunsdk.js                       # 网易易盾/极验 验证码 SDK
+│   └── js/
+│       ├── fp/1.3.2.umd.js                            # 设备指纹 SDK（weibo.com 用，v1.3.2）
+│       ├── fp/1.2.1.umd.js                            # 设备指纹 SDK（passport 弹窗用，v1.2.1）
+│       ├── lib/crypto.js                              # 加密工具库（RSA/AES，被 fp/yidun 引用）
+│       ├── lib/forge.js                               # 加密工具库（forge，被 fp/yidun 引用）
+│       └── yidun/v1/yidunsdk.js                       # 网易易盾/极验 验证码 SDK
 ```
 
 > 说明：原始抓取的文件多为压缩混淆（单行）代码，已用 `js-beautify`（indent-size=2，
 > 不折行）美化为可读的多行代码，逻辑与变量名保持原样（仅格式化，未做语义改写）。
 > `48po.js` 原本即为可读代码，直接原样保留。
 >
-> `h5.sinaimg.cn` 这棵树由 `src/static_fetch.py` 生成（见文末「刷新镜像」），抓取与美化一步
-> 完成；另外三个域名是早先从浏览器手工抓取的。
+> 这里的每一棵树都由 `src/static_fetch.py` 生成（见文末「刷新镜像」），抓取、美化并写出各域自己的
+> `_manifest.json` / `_urls.txt`，一步完成。`a.sinaimg.cn` / `i.sso.sina.com.cn` / `passport.sinaimg.cn`
+> 最初是从浏览器手工抓取的，现在统一由该工具维护。
 
 ---
 
-## 1. `h5.sinaimg.cn/m/login/assets/pages/login/login-ZbqmGudM.js` ★ 核心文件
+## 1. `h5.sinaimg.cn/m/login/assets/pages/login/login-LnJ2gZQP.js` ★ 核心文件
 
 **这是什么**：现代 `weibo.com` 登录弹窗（`passport.weibo.com/sso/signin?...&disp=popup`）
-的真实页面逻辑，基于 Vue 3 + Vite 构建。文件名中的 hash `ZbqmGudM` 是构建产物指纹。
+的真实页面逻辑，基于 Vue 3 + Vite 构建。文件名中的 hash 是构建产物指纹（每次部署轮换，当前为 `LnJ2gZQP`）。
 这是项目中**唯一**真正实现了 `sso/v2/qrcode` 系列接口的前端代码。
 
 **两个入口，同一套实现。** 登录应用有两个 HTML 外壳可达，各自加载同一个 Vite 应用的不同
@@ -69,13 +72,12 @@ chunk：
 
 | 外壳 | 入口 chunk |
 |---|---|
-| `passport.weibo.com/sso/signin?...&disp=popup` | `assets/pages/login/login-ZbqmGudM.js` |
+| `passport.weibo.com/sso/signin?...&disp=popup` | `assets/pages/login/login-LnJ2gZQP.js` |
 | `h5.sinaimg.cn/m/login/index.html` | `assets/index-qbEBDs52.js` |
 
 两个 chunk 里的扫码登录常量完全一致 —— `sso/v2/qrcode/image`、`sso/v2/qrcode/check`、
 `ver: "20250520"` 以及 retcode `50114002/03/04/15` —— 因此下面的事实对两个构建都成立，
-`auth.py` 无需改动。（2026-09-06 重新镜像时复核：除末尾多了一个换行外，
-`login-ZbqmGudM.js` 与 `useRoute-Mc4PELCL.js` 与仓库里原有的副本**逐字节相同**。）
+`auth.py` 无需改动。（构建指纹会随部署轮换：本次 2026-09-26 刷新抓到的新版为 `login-LnJ2gZQP.js` / `useRoute-bcAylSob.js`；上一版 `login-ZbqmGudM.js` / `useRoute-Mc4PELCL.js` 作为历史仍保留在镜像中。核心扫码常量在构建间保持一致，故下方分析结论不变。）
 
 **与 `auth.py` 直接对应的关键事实**（已从源码逐字确认）：
 
@@ -111,15 +113,15 @@ chunk：
 
 ---
 
-## 2. `h5.sinaimg.cn/m/login/assets/useRoute-Mc4PELCL.js`
+## 2. `h5.sinaimg.cn/m/login/assets/useRoute-bcAylSob.js`
 
-**这是什么**：Vite 构建产物的**框架运行时/公共 chunk**（文件名 hash `Mc4PELCL`）。它不包含
+**这是什么**：Vite 构建产物的**框架运行时/公共 chunk**（文件名 hash `bcAylSob`）。它不包含
 具体登录业务，而是提供 Vue 3 的响应式系统、组件运行时、`modulepreload` polyfill、路由
-（`useRoute` 等）等基础设施。`login-ZbqmGudM.js` 通过 `import` 引用它提供的符号
+（`useRoute` 等）等基础设施。`login-LnJ2gZQP.js` 通过 `import` 引用它提供的符号
 （`d as Q` = `createApp`，`e as $t` = axios 实例，等等）。
 
-**为何保留**：它是阅读 `login-ZbqmGudM.js` 时理解其依赖（尤其是其中 `import { ... } from
-"../../useRoute-Mc4PELCL.js"` 的 `$t` axios 实例、Vue 组合式 API）所必需的上下文。
+**为何保留**：它是阅读 `login-LnJ2gZQP.js` 时理解其依赖（尤其是其中 `import { ... } from
+"../../useRoute-bcAylSob.js"` 的 `$t` axios 实例、Vue 组合式 API）所必需的上下文。
 搜索其中 `createWebHistory` / `Router` / 响应式函数可确认其为通用框架代码，与登录协议无关。
 
 ---
@@ -167,7 +169,7 @@ chunk：
 **关键事实**：
 
 - 暴露 `window.wbBotDetector.get({useCache})`，返回对象含 `rid` 字段。
-- 这个 `rid` 正是扫码/登录请求里 `rid` 参数的来源（见第 1 节 `login-ZbqmGudM.js`）。
+- 这个 `rid` 正是扫码/登录请求里 `rid` 参数的来源（见第 1 节 `login-LnJ2gZQP.js`）。
 - 指纹上报地址：`bdUrl: "https://passport.weibo.com/sso/bd"`（RSA-OAEP + AES-CBC 加密上报浏览器
   信号：`userAgent`、canvas/webgl、屏幕、字体、时区等）。
   → 对应 `auth.py` 的访客票据流程 `WEIBO_URL_VISITOR_BD`。
@@ -188,7 +190,7 @@ chunk：
 - 初始化：`window.ydInit({ geetestKey, captchaId, ... })`，弹出滑块/点选验证码。
 - 校验上报：`https://security.weibo.com/captcha/yidun?key=<geetestKey>&validate=<token>&callback=...`
   返回 `retcode === 1e5`（100000）表示通过。
-- 在 `login-ZbqmGudM.js` 的密码登录分支中，风控触发时会调用 `ydInit` 进行人机校验。
+- 在 `login-LnJ2gZQP.js` 的密码登录分支中，风控触发时会调用 `ydInit` 进行人机校验。
 
 **对 `auth.py` 的意义**：验证码是**风控组件**，仅在可疑流量（如异地、频繁失败）时插入。
 正常持 cookie 的静默续期（`renew()`）与扫码登录主流程**不依赖**它；本工具当前未实现验证码，
@@ -215,7 +217,7 @@ chunk：
 
 - `tmp/weibo.com/`：从 `weibo.com` 主站及其直接引用资源下载（主 web bundle `index-vhVQ3q5j.js`
   仅含弹窗打开 + `postMessage` 结果通道，**不含** `sso/v2` 端点实现）。
-- `tmp/passport.weibo.com/`：单独下载的**登录弹窗**资源，`login-ZbqmGudM.js` 即真实 V2 逻辑所在。
+- `tmp/passport.weibo.com/`：单独下载的**登录弹窗**资源，`login-LnJ2gZQP.js` 即真实 V2 逻辑所在。
 - 本目录其余文件由上述原始下载复制并美化而来；通过分析这些文件，确认了 `auth.py` 的协议实现细节。
 
 ---
@@ -238,6 +240,10 @@ venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --
 
 # 只重新美化磁盘上已有的文件（不联网）
 venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --beautify-only
+
+# 镜像 a.sinaimg.cn（需要 Referer 才能绕过 403 防盗链）
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain a.sinaimg.cn `
+    --referer https://weibo.com/ --force --beautify
 ```
 
 由于目录列表被禁用，工具组合了**三条**发现通道：
@@ -258,15 +264,20 @@ venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --
 使记录的大小与 SHA-1 对应美化后的结果，而不是原始下载内容。
 
 常用参数：`--seed URL`（可重复，替换内置种子列表）、`--root-words`（`--discover-roots` 用的
-词表）、`--ext`（扩展名白名单 —— 传 `--ext js,mjs,css,json,map,html` 可跳过 308 个表情 PNG）、
-`--force`（重新下载已存在的文件）、`--dry-run` 与 `--beautify-only`。
+词表）、`--ext`（扩展名白名单 —— 传 `--ext js,mjs,css,json,map,html` 可跳过表情 PNG）、
+`--force`（重新下载已存在的文件）、`--dry-run` 与 `--beautify-only`。部分域名位于登录/反爬
+网关或防盗链之后，需要额外请求头：`--cookie-file PATH` 加载项目的 JSON cookie 仓库
+（例如 `src/cookies.<viewer_uid>.weibo`，即 viewer 账号）到会话里；`--referer URL` 设置
+`Referer`（`a.sinaimg.cn` 缺它就会 403）。注意：`weibo.com` 与 `m.weibo.cn` **刻意不纳入镜像**——`weibo.com` 用登录态抓取会把已登录用户的个人资料（`$CONFIG`）写进每个路由页（PII）；`m.weibo.cn` 仅 3 个独立资源、价值可忽略；真正的视频/前端包都在 `h5.sinaimg.cn`。`--cookie-file` / `--referer` 这些开关仍可用于其他需登录/防盗链的域。
 
 ### 仓库里提交哪些文件
 
 只有**文本**资源进 Git：JS、CSS、SVG、HTML、JSON，外加 `_manifest.json` 与 `_urls.txt`。
-二进制内容 —— 表情、字体、图标，共 407 个文件 / 3.5 MB —— 已被 **git 忽略**，它们没有分析
-价值，而且 `_urls.txt` 随时能重新拉回来。`.gitattributes` 里仍保留 Git LFS 配置作为兜底：
-万一以后真有二进制被提交，也会自动走 LFS 而不是撑大对象库。
+二进制内容 —— 表情、字体、图标，共 435 个文件 / 3.5 MB —— 已被 **git 忽略**（见 `.gitignore`
+里的 `src/static/**/*` 规则），它们没有分析价值，而且 `_urls.txt` 随时能重新拉回来。
+source map（`*.map`）若存在会作为文本进 Git（本次运行 CDN 未提供，故未镜像）。`.gitattributes`
+里仍保留 Git LFS 配置作为兜底：万一以后真有二进制被提交，也会自动走 LFS 而不是撑大对象库。
+SVG 作为文本（体积很小的矢量标记，不是二进制块）保留进 Git。
 
 ### 以后如何更新/重新获取
 
@@ -299,6 +310,6 @@ python src/static_fetch.py --domain h5.sinaimg.cn --from-manifest --beautify
 而不会因为本地没有文件却收到 `304` 导致什么都恢复不了。若环境没有 Node/npx，去掉
 `--beautify` 即可，差别只在格式化。
 
-**覆盖仍然不是穷尽的** —— 它受限于种子、词表和恰好存在的 sourcemap。当前运行：
-**632 个资源 / 原始 23.8 MB（美化后 33 MB）**，其中 308 个是 `m/weibo-lite` 表情表引入的
-表情 PNG。
+**覆盖仍然不是穷尽的** —— 它受限于种子、词表和恰好存在的 sourcemap。各域名资源数（当前镜像）：
+`h5.sinaimg.cn` **686 个（美化后约 41 MB）**，其中 308 个是表情 PNG；`passport.sinaimg.cn` 5 个；`i.sso.sina.com.cn` 1 个；`a.sinaimg.cn` 1 个。
+`weibo.com` 与 `m.weibo.cn` 已探测并排除（见上）。本次运行 CDN 未提供 source map，故未镜像。

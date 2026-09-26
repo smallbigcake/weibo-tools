@@ -27,11 +27,11 @@ src/static/
 │   │       ├── index-legacy-qIW06_yt.js              # legacy (nomodule) counterpart
 │   │       ├── polyfills-legacy-a6DDm_QJ.js
 │   │       ├── phone-Y7lal6Xm.png
-│   │       ├── useRoute-Mc4PELCL.js                  # framework / shared chunk
+│   │       ├── useRoute-bcAylSob.js                  # framework / shared chunk
 │   │       ├── useRoute-Lc2vcnMQ.css
 │   │       ├── useRoute-legacy-whaJrky6.js
 │   │       └── pages/login/
-│   │           ├── login-ZbqmGudM.js                 # ★ route chunk the passport shell loads
+│   │           ├── login-LnJ2gZQP.js                 # ★ route chunk the passport shell loads
 │   │           ├── login-legacy-MItL3eV6.js
 │   │           └── polyfills-legacy-H7cWsSyN.js
 │   ├── m/weibo-pro-next/                             # current "pro" creator app (Vue 3, 2026-09)
@@ -45,10 +45,12 @@ src/static/
 ├── i.sso.sina.com.cn/
 │   └── js/qrcode_login_v2.js                          # V1 QR login logic (misleading filename)
 └── passport.sinaimg.cn/
-    └── js/
-        ├── fp/1.3.2.umd.js                            # Device-fingerprint SDK (weibo.com, v1.3.2)
-        ├── fp/1.2.1.umd.js                            # Device-fingerprint SDK (passport popup, v1.2.1)
-        └── yidun/v1/yidunsdk.js                       # NetEase Yidun / Geetest captcha SDK
+│   └── js/
+│       ├── fp/1.3.2.umd.js                            # Device-fingerprint SDK (weibo.com, v1.3.2)
+│       ├── fp/1.2.1.umd.js                            # Device-fingerprint SDK (passport popup, v1.2.1)
+│       ├── lib/crypto.js                              # crypto helpers (RSA/AES, referenced by fp/yidun)
+│       ├── lib/forge.js                               # forge crypto lib (referenced by fp/yidun)
+│       └── yidun/v1/yidunsdk.js                       # NetEase Yidun / Geetest captcha SDK
 ```
 
 > Note: the captured files were mostly minified (single-line) code; they have been beautified
@@ -56,17 +58,18 @@ src/static/
 > variable names are preserved (formatting only, no semantic changes). `48po.js` was already
 > readable and is kept as-is.
 >
-> The `h5.sinaimg.cn` tree is produced by `src/static_fetch.py` (see "Refreshing the mirror" at the
-> end), which fetches and beautifies in one step; the other three domains were captured by hand
-> from the browser.
+> Every tree here is produced by `src/static_fetch.py` (see "Refreshing the mirror" at the
+> end), which fetches, beautifies and writes a per-domain `_manifest.json` / `_urls.txt` in one step.
+> `a.sinaimg.cn` / `i.sso.sina.com.cn` / `passport.sinaimg.cn` were first captured by hand from the
+> browser and are now maintained by the same tool.
 
 ---
 
-## 1. `h5.sinaimg.cn/m/login/assets/pages/login/login-ZbqmGudM.js` ★ Core file
+## 1. `h5.sinaimg.cn/m/login/assets/pages/login/login-LnJ2gZQP.js` ★ Core file
 
 **What it is**: the real page logic of the modern `weibo.com` login popup
 (`passport.weibo.com/sso/signin?...&disp=popup`), built with Vue 3 + Vite. The hash
-`ZbqmGudM` is a build artifact fingerprint. This is the **only** front-end code that actually
+`LnJ2gZQP` is a build artifact fingerprint (it rotates on each deploy). This is the **only** front-end code that actually
 implements the `sso/v2/qrcode` family of endpoints.
 
 **Two entry points, one implementation.** The login app is reachable through two HTML shells,
@@ -74,14 +77,15 @@ and each loads a different Vite chunk of the same app:
 
 | Shell | Entry chunk |
 |---|---|
-| `passport.weibo.com/sso/signin?...&disp=popup` | `assets/pages/login/login-ZbqmGudM.js` |
+| `passport.weibo.com/sso/signin?...&disp=popup` | `assets/pages/login/login-LnJ2gZQP.js` |
 | `h5.sinaimg.cn/m/login/index.html` | `assets/index-qbEBDs52.js` |
 
 Both chunks still carry byte-identical QR-login constants — `sso/v2/qrcode/image`,
 `sso/v2/qrcode/check`, `ver: "20250520"` and retcodes `50114002/03/04/15` — so the facts below
-hold for either build and `auth.py` needs no change. (Re-verified on the 2026-09-06 mirror:
-`login-ZbqmGudM.js` and `useRoute-Mc4PELCL.js` are still byte-identical to the copies already
-in this repository, apart from a trailing newline.)
+hold for either build and `auth.py` needs no change. (Build fingerprints rotate on each deploy: the 2026-09-26 refresh fetched the new
+`login-LnJ2gZQP.js` / `useRoute-bcAylSob.js`; the previous `login-ZbqmGudM.js` /
+`useRoute-Mc4PELCL.js` are retained in the mirror as history. The core QR-scan constants
+are stable across builds, so the analysis below is unchanged.)
 
 **Key facts directly corresponding to `auth.py`** (verified verbatim from source):
 
@@ -120,16 +124,16 @@ in this repository, apart from a trailing newline.)
 
 ---
 
-## 2. `h5.sinaimg.cn/m/login/assets/useRoute-Mc4PELCL.js`
+## 2. `h5.sinaimg.cn/m/login/assets/useRoute-bcAylSob.js`
 
-**What it is**: the **framework runtime / shared chunk** of the Vite build (hash `Mc4PELCL`). It
+**What it is**: the **framework runtime / shared chunk** of the Vite build (hash `bcAylSob`). It
 contains no login business logic; instead it provides the Vue 3 reactivity system, component
-runtime, `modulepreload` polyfill, routing (`useRoute`, etc.). `login-ZbqmGudM.js` imports symbols
+runtime, `modulepreload` polyfill, routing (`useRoute`, etc.). `login-LnJ2gZQP.js` imports symbols
 from it (`d as Q` = `createApp`, `e as $t` = axios instance, and so on).
 
-**Why it is kept**: it is required context for reading `login-ZbqmGudM.js` — especially the `$t`
+**Why it is kept**: it is required context for reading `login-LnJ2gZQP.js` — especially the `$t`
 axios instance and the Vue composition APIs referenced via `import { ... } from
-"../../useRoute-Mc4PELCL.js"`. Searching it for `createWebHistory` / `Router` / reactivity helpers
+"../../useRoute-bcAylSob.js"`. Searching it for `createWebHistory` / `Router` / reactivity helpers
 confirms it is generic framework code, unrelated to the login protocol.
 
 ---
@@ -185,7 +189,7 @@ serve the same purpose at different versions:
 
 - Exposes `window.wbBotDetector.get({useCache})`, returning an object with a `rid` field.
 - This `rid` is exactly the source of the `rid` param in QR/login requests (see section 1,
-  `login-ZbqmGudM.js`).
+  `login-LnJ2gZQP.js`).
 - Fingerprint reporting endpoint: `bdUrl: "https://passport.weibo.com/sso/bd"` (RSA-OAEP + AES-CBC
   encrypted reporting of browser signals: `userAgent`, canvas/webgl, screen, fonts, timezone, etc.).
   → corresponds to `auth.py`'s visitor-ticket flow `WEIBO_URL_VISITOR_BD`.
@@ -207,7 +211,7 @@ standard NetEase captcha interface) and supports Geetest (`geetestKey` / `captch
 - Init: `window.ydInit({ geetestKey, captchaId, ... })` pops a slider/click captcha.
 - Validation report: `https://security.weibo.com/captcha/yidun?key=<geetestKey>&validate=<token>&callback=...`,
   returning `retcode === 1e5` (100000) on success.
-- In the password-login branch of `login-ZbqmGudM.js`, risk control triggers `ydInit` for a human
+- In the password-login branch of `login-LnJ2gZQP.js`, risk control triggers `ydInit` for a human
   verification.
 
 **Significance for `auth.py`**: the captcha is a **risk-control component**, inserted only on
@@ -237,7 +241,7 @@ risk control, this file is the reference for integrating `security.weibo.com/cap
 - `tmp/weibo.com/`: downloaded from the `weibo.com` main site and its directly referenced
   resources. The main web bundle `index-vhVQ3q5j.js` only contains the popup-open + `postMessage`
   result channel and does **not** contain the `sso/v2` endpoint implementation.
-- `tmp/passport.weibo.com/`: the **login popup** resources downloaded separately; `login-ZbqmGudM.js`
+- `tmp/passport.weibo.com/`: the **login popup** resources downloaded separately; `login-LnJ2gZQP.js`
   is where the real V2 logic lives.
 - The other files in this directory are copied and beautified from those original downloads;
   analyzing them confirmed the protocol implementation details used in `auth.py`.
@@ -263,6 +267,10 @@ venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --
 
 # re-beautify what is already on disk (no network)
 venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain h5.sinaimg.cn --beautify-only
+
+# mirror a.sinaimg.cn (needs a Referer to bypass the 403 hotlink block)
+venvs/weibo-env\Scripts\python.exe src/static_fetch.py --domain a.sinaimg.cn \
+    --referer https://weibo.com/ --force --beautify
 ```
 
 Because listing is disabled, the tool combines **three** discovery channels:
@@ -285,15 +293,25 @@ so the recorded size and SHA-1 describe the beautified output rather than the ra
 
 Useful flags: `--seed URL` (repeatable, replaces the built-in seed list), `--root-words` (word
 list for `--discover-roots`), `--ext` (extension allow-list — pass
-`--ext js,mjs,css,json,map,html` to skip the 308 emoticon PNGs), `--force` (re-download files
-that already exist), `--dry-run` and `--beautify-only`.
+`--ext js,mjs,css,json,map,html` to skip the emoticon PNGs), `--force` (re-download files
+that already exist), `--dry-run` and `--beautify-only`. Some domains sit behind a login /
+anti-bot gate or hotlink protection and need extra headers: `--cookie-file PATH` loads the
+project's JSON cookie jar (e.g. `src/cookies.<viewer_uid>.weibo`, the viewer account) into the
+session, and `--referer URL` sets a `Referer` (required for `a.sinaimg.cn`, which 403s without
+one). NOTE: `weibo.com` and `m.weibo.cn` are **not** part of the mirror — `weibo.com` bakes the
+logged-in user's profile (`$CONFIG`) into every route shell (PII), and `m.weibo.cn` contributed only
+3 standalone assets (negligible). The real front-end bundle lives on `h5.sinaimg.cn`. The
+`--cookie-file` / `--referer` flags remain available for any gated domain.
 
 ### What is committed
 
 Only **text** assets live in Git: JS, CSS, SVG, HTML, JSON, plus `_manifest.json` and
-`_urls.txt`. The binary payload — emoticons, fonts and icons, 407 files / 3.5 MB — is
-**git-ignored**, because it carries no analytical value and `_urls.txt` can always restore it.
-`.gitattributes` keeps Git LFS wired up as a safety net in case a binary is ever committed.
+`_urls.txt`. The binary payload — emoticons, fonts and icons, 435 files / 3.5 MB — is
+**git-ignored** (see the `src/static/**/*` rules in `.gitignore`), because it carries no
+analytical value and `_urls.txt` can always restore it. Source maps (`*.map`) are tracked as text
+when present (none were served by the CDN on the current run). `.gitattributes` keeps Git LFS
+wired up as a safety net in case a binary is ever committed. SVG is kept as text (small vector
+markup, not a binary blob).
 
 ### Re-fetching later
 
@@ -331,5 +349,7 @@ real downloads (including the binaries) rather than `304`s for files it does not
 `--beautify` if Node/npx is unavailable; the only difference is formatting.
 
 **Coverage is still not exhaustive** — it is bounded by the seeds, the word list and the
-sourcemaps that happen to exist. Current run: **632 assets / 23.8 MB raw (33 MB beautified)**,
-of which 308 are emoticon PNGs pulled in by the `m/weibo-lite` emotion table.
+sourcemaps that happen to exist. Per-domain asset counts (current mirrors): `h5.sinaimg.cn`
+**686 assets (≈41 MB beautified)**, of which 308 are emoticon PNGs; `passport.sinaimg.cn` 5; `i.sso.sina.com.cn` 1;
+`a.sinaimg.cn` 1. `weibo.com` and `m.weibo.cn` were probed and excluded (see note above). Source maps were not
+served by the CDN on this run, so none are mirrored.

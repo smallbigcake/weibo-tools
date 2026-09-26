@@ -67,10 +67,11 @@ logs/
 # do NOT commit). Copy scripts/scan_config.example.json -> .scan_config.json locally.
 .scan_config.json
 
-# Binary assets mirrored by src/static_fetch.py (emoticons, fonts, icons) are
-# NOT committed. They are pure CDN payload with no analytical value in Git and
-# can always be re-fetched from the recorded URLs in
-# src/static/h5.sinaimg.cn/_urls.txt (see `--from-manifest`).
+# Binary assets mirrored by src/static_fetch.py (emoticons, fonts, icons, media
+# ) are NOT committed. They are pure CDN payload with no analytical
+# value in Git and can always be re-fetched from the recorded URLs in
+# src/static/<domain>/_urls.txt (see `--from-manifest`). Text assets (JS, CSS,
+# SVG, HTML, JSON), _manifest.json and _urls.txt stay tracked.
 src/static/**/*.bmp
 src/static/**/*.eot
 src/static/**/*.gif
@@ -83,3 +84,12 @@ src/static/**/*.ttf
 src/static/**/*.webp
 src/static/**/*.woff
 src/static/**/*.woff2
+# Media — not expected from these CDNs, listed for safety.
+src/static/**/*.mp4
+src/static/**/*.webm
+src/static/**/*.avif
+src/static/**/*.mov
+src/static/**/*.m4v
+src/static/**/*.mp3
+src/static/**/*.wav
+src/static/**/*.ogg

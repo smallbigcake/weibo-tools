@@ -27,7 +27,7 @@ try {
   ];
 
   function checkPath(path) {
-    return pathList.some(function (item) {
+    return pathList.some(function(item) {
       return path.indexOf(item) === 0;
     });
   }
@@ -67,7 +67,7 @@ try {
     });
   }
 
-  var po = new PerformanceObserver(function (list) {
+  var po = new PerformanceObserver(function(list) {
     for (var entry of list.getEntries()) {
       // If transferSize is 0, the resource was fulfilled via the cache.
       // console.log(entry.name, entry.transferSize === 0, entry);
@@ -84,8 +84,8 @@ try {
 
             if (r0.requestStart) {
               (dns = r0.domainLookupEnd - r0.domainLookupStart),
-                (tcp = r0.connectEnd - r0.connectStart),
-                (ttfb = r0.responseStart - r0.requestStart);
+              (tcp = r0.connectEnd - r0.connectStart),
+              (ttfb = r0.responseStart - r0.requestStart);
 
               if (r0.secureConnectionStart) {
                 ssl = r0.connectEnd - r0.secureConnectionStart;
@@ -136,7 +136,10 @@ try {
     }
   });
   // Start listening for `resource` entries to be dispatched.
-  po.observe({ entryTypes: ['mark', 'resource'], buffered: true });
+  po.observe({
+    entryTypes: ['mark', 'resource'],
+    buffered: true
+  });
 } catch (e) {
   // Do nothing if the browser doesn't support this API.
 }

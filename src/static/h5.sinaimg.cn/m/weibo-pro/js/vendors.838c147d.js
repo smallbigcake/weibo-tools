@@ -27123,6 +27123,7 @@
               var e = t.indexOf(this); - 1 != e && t.splice(e, 1)
             }, window.IntersectionObserver = a, window.IntersectionObserverEntry = i
           }
+
         function i(e) {
           this.time = e.time, this.target = e.target, this.rootBounds = d(e.rootBounds), this.boundingClientRect = d(e.boundingClientRect), this.intersectionRect = d(e.intersectionRect || f()), this.isIntersecting = !!e.intersectionRect;
           var t = this.boundingClientRect,
@@ -41898,6 +41899,7 @@
                             if (!s) return ye() ? (s = !0, x.trigger(l.Z.STREAM_ACTIVATED, {
                               streamInfo: H
                             }), void r(t)) : void
+
                             function(e, t) {
                               return q(e, t)
                             }(e, t).then((function(e) {

@@ -1,0 +1,5 @@
+https://passport.sinaimg.cn/js/fp/1.2.1.umd.js
+https://passport.sinaimg.cn/js/fp/1.3.2.umd.js
+https://passport.sinaimg.cn/js/lib/crypto.js
+https://passport.sinaimg.cn/js/lib/forge.js
+https://passport.sinaimg.cn/js/yidun/v1/yidunsdk.js

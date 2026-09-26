@@ -188,9 +188,28 @@ def local_path(out_root, domain, url):
     return os.path.join(out_root, domain, head, tail)
 
 
+def load_cookies_into(session, path):
+    """Load the project's JSON cookie jar (list of {name,value,domain,...})
+    into a requests Session to pass login / anti-bot gates."""
+    import json
+    with open(path, encoding='utf-8') as f:
+        cookies = json.load(f)
+    for c in cookies:
+        try:
+            session.cookies.set(
+                name=c['name'], value=c['value'],
+                domain=c.get('domain'), path=c.get('path', '/'),
+                secure=bool(c.get('secure', False)),
+                expires=c.get('expires'),
+            )
+        except Exception:
+            pass
+
+
 class Fetcher(object):
     def __init__(self, domain, out_root, seeds, exts, max_depth, max_files,
-                 max_bytes, delay, force, dry_run):
+                 max_bytes, delay, force, dry_run, cookie_file=None,
+                 referer=None):
         self.domain = domain
         self.out_root = out_root
         self.exts = tuple(e.lower().lstrip('.') for e in exts)
@@ -206,6 +225,10 @@ class Fetcher(object):
             'Accept': '*/*',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         })
+        if referer:
+            self.session.headers['Referer'] = referer
+        if cookie_file:
+            load_cookies_into(self.session, cookie_file)
         self.seen = set()
         self.manifest = []
         self.rejected = []
@@ -409,21 +432,45 @@ class Fetcher(object):
                     dest = local_path(self.out_root, self.domain, url)
                     if os.path.exists(dest) and not self.force:
                         print('    = already present (use --force to re-download)')
+                        self.manifest.append({
+                            'url': url,
+                            'file': rel.replace(self.domain + '/', '', 1),
+                            'bytes': len(body),
+                            'sha1': hashlib.sha1(body).hexdigest(),
+                            'content_type': ct(resp),
+                            'etag': resp.headers.get('ETag'),
+                            'last_modified': resp.headers.get('Last-Modified'),
+                            'depth': depth,
+                        })
                     else:
-                        os.makedirs(os.path.dirname(dest), exist_ok=True)
-                        with open(dest, 'wb') as fh:
-                            fh.write(body)
-                        print('    -> %s (%d bytes)' % (rel, len(body)))
-                    self.manifest.append({
-                        'url': url,
-                        'file': rel.replace(self.domain + '/', '', 1),
-                        'bytes': len(body),
-                        'sha1': hashlib.sha1(body).hexdigest(),
-                        'content_type': ct(resp),
-                        'etag': resp.headers.get('ETag'),
-                        'last_modified': resp.headers.get('Last-Modified'),
-                        'depth': depth,
-                    })
+                        try:
+                            parent = os.path.dirname(dest)
+                            # A URL path can be a prefix of another's (e.g.
+                            # /api/app.js vs /api/app.js/sw.js): when the
+                            # would-be parent is already a file, we cannot make
+                            # it a directory. Skip instead of aborting the run.
+                            if os.path.isfile(parent):
+                                raise FileExistsError(parent)
+                            os.makedirs(parent, exist_ok=True)
+                            with open(dest, 'wb') as fh:
+                                fh.write(body)
+                            print('    -> %s (%d bytes)' % (rel, len(body)))
+                            self.manifest.append({
+                                'url': url,
+                                'file': rel.replace(self.domain + '/', '', 1),
+                                'bytes': len(body),
+                                'sha1': hashlib.sha1(body).hexdigest(),
+                                'content_type': ct(resp),
+                                'etag': resp.headers.get('ETag'),
+                                'last_modified': resp.headers.get('Last-Modified'),
+                                'depth': depth,
+                            })
+                        except FileExistsError:
+                            print('    ! path collision (ancestor is a file),'
+                                  ' skipped: %s' % rel)
+                        except OSError as exc:
+                            print('    ! write failed (%s): %s'
+                                  % (type(exc).__name__, rel))
 
             if depth >= self.max_depth:
                 continue
@@ -580,6 +627,14 @@ def main(argv=None):
                         help='Probe service workers at every known app root; '
                              'their Workbox precache manifest enumerates '
                              'assets the crawl cannot reach.')
+    parser.add_argument('--cookie-file', default=None,
+                        help='Path to a JSON cookie jar (project format: a list '
+                             'of {name,value,domain,path,...}) loaded into the '
+                             'session to pass login / anti-bot gates (e.g. the '
+                             'viewer account cookies.<UID>.weibo).')
+    parser.add_argument('--referer', default=None,
+                        help='Set a Referer header; useful for hotlink-protected '
+                             'image CDNs such as a.sinaimg.cn.')
     args = parser.parse_args(argv)
 
     if args.beautify_only:
@@ -595,7 +650,8 @@ def main(argv=None):
     max_files = args.max_files if args.max_files is not None else 500
     fetcher = Fetcher(args.domain, args.out, seeds,
                       args.ext.split(','), args.max_depth, max_files,
-                      args.max_bytes, args.delay, args.force, args.dry_run)
+                      args.max_bytes, args.delay, args.force, args.dry_run,
+                      cookie_file=args.cookie_file, referer=args.referer)
 
     extra = list(seeds)
     if args.from_manifest:

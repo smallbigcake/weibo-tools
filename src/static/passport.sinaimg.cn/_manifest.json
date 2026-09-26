@@ -1,0 +1,57 @@
+{
+  "domain": "passport.sinaimg.cn",
+  "generated_at": "2026-09-26T12:31:41+0800",
+  "asset_count": 5,
+  "assets": [
+    {
+      "url": "https://passport.sinaimg.cn/js/fp/1.2.1.umd.js",
+      "file": "js/fp/1.2.1.umd.js",
+      "bytes": 45463,
+      "sha1": "76cdd48c8ca7b45066d9064a1a02a88f65421494",
+      "content_type": "application/x-javascript",
+      "etag": "\"6a70860c-75ef\"",
+      "last_modified": "Mon, 03 Aug 2026 12:14:04 GMT",
+      "depth": 0
+    },
+    {
+      "url": "https://passport.sinaimg.cn/js/fp/1.3.2.umd.js",
+      "file": "js/fp/1.3.2.umd.js",
+      "bytes": 49620,
+      "sha1": "54ea949e1359a448d4240741979b7f163c9168f6",
+      "content_type": "application/x-javascript",
+      "etag": "\"6a70860c-8464\"",
+      "last_modified": "Mon, 03 Aug 2026 12:14:04 GMT",
+      "depth": 0
+    },
+    {
+      "url": "https://passport.sinaimg.cn/js/lib/crypto.js",
+      "file": "js/lib/crypto.js",
+      "bytes": 85806,
+      "sha1": "2a7169994d0726a4d58341b56c13d445756faca5",
+      "content_type": "application/x-javascript",
+      "etag": "\"6a70860c-ed93\"",
+      "last_modified": "Mon, 03 Aug 2026 12:14:04 GMT",
+      "depth": 0
+    },
+    {
+      "url": "https://passport.sinaimg.cn/js/lib/forge.js",
+      "file": "js/lib/forge.js",
+      "bytes": 398919,
+      "sha1": "5e36aaf50379ae268b6293a907283db8903836d7",
+      "content_type": "application/x-javascript",
+      "etag": "\"6a70860c-44c0d\"",
+      "last_modified": "Mon, 03 Aug 2026 12:14:04 GMT",
+      "depth": 0
+    },
+    {
+      "url": "https://passport.sinaimg.cn/js/yidun/v1/yidunsdk.js",
+      "file": "js/yidun/v1/yidunsdk.js",
+      "bytes": 10568,
+      "sha1": "18e9bf948ca5f67001e4ab17e16de7c0d1d30c07",
+      "content_type": "application/x-javascript",
+      "etag": "W/\"6a70860c-4863\"",
+      "last_modified": "Mon, 03 Aug 2026 12:14:04 GMT",
+      "depth": 0
+    }
+  ]
+}

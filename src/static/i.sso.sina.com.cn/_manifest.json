@@ -1,0 +1,17 @@
+{
+  "domain": "i.sso.sina.com.cn",
+  "generated_at": "2026-09-26T12:31:41+0800",
+  "asset_count": 1,
+  "assets": [
+    {
+      "url": "https://i.sso.sina.com.cn/js/qrcode_login_v2.js",
+      "file": "js/qrcode_login_v2.js",
+      "bytes": 19572,
+      "sha1": "8b63ac0d42c2d535d738b79d12047774da8260eb",
+      "content_type": "application/x-javascript",
+      "etag": "\"67e519f7-2adf\"",
+      "last_modified": "Thu, 27 Mar 2025 09:27:19 GMT",
+      "depth": 0
+    }
+  ]
+}
