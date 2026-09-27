@@ -1,9 +1,9 @@
 """Simulated viewer-watch via the PROFILE/WATERFALL page (browser-faithful order).
 
 ==========================================================================
-What this does (and why it differs from quick_watch_recent.py)
+What this does (and why it differs from beacon_engine.py)
 --------------------------------------------------------------------------
-`quick_watch_recent.py` replays the playback-report BEACONS only. It NEVER
+`beacon_engine.py` replays the playback-report BEACONS only. It NEVER
 fetches the actual video bytes, so it is not a "watch" — and (verified
 2026-09-23) the beacon set did NOT credit creator-center `play_dura_count`.
 
@@ -34,7 +34,7 @@ The browser uses the VIEWER session for everything, so all calls here use the
 viewer session (config 'viewer_uid'); the author session is used only for the optional
 pre/post creator-center aggregate snapshot.
 
-Beacon implementations are REUSED from quick_watch_recent (single source of
+Beacon implementations are REUSED from beacon_engine (single source of
 truth) — this file adds only the waterfall-source + DASH byte-fetch layer.
 
 Usage:
@@ -68,14 +68,19 @@ _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, _src_root)
 
 from auth import Auth
-from logutil import setup as _setup_logging
+from logutil import setup as _setup_logging, share_handler
 _setup_logging()
-# Reuse the canonical beacon implementations from quick_watch_recent (single source of truth).
-from quick_watch_recent import (  # noqa: E402
+# Reuse the canonical beacon implementations from beacon_engine (single source of truth).
+from beacon_engine import (  # noqa: E402
     _viewer_session, _post_report_step, _post_h5playlog_step,
     _post_playstatistics_step, _post_read_step, _post_action_step,
     _post_rum_step, _rum_transaction,
-    build_sequence, beijing, get_video_list, UA, req_host_value, set_log_suffix,
+    build_sequence, beijing, get_video_list, UA, req_host_value,
+    _http_ok, log as _beacon_log,
+)
+# DASH url selection + byte-fetch live in dash_streamer.py.
+from dash_streamer import (  # noqa: E402
+    DashStreamer, pick_dash_urls, log as _dash_log,
 )
 
 SRC_DIR = _src_root
@@ -86,10 +91,9 @@ CREATOR_REF = "https://weibo.com/"
 log = logging.getLogger('simulated_watch')
 log.setLevel(logging.DEBUG)
 log.propagate = False
-# Per-BATCH log suffix (timestamp) so repeated runs on the same day get separate
-# files instead of interleaving. The quick_watch beacon logger is pointed at the
-# SAME suffix (via set_log_suffix below) so a batch's main + beacon logs share a
-# token and can be pulled together with e.g. `ls *<BATCH>*`.
+# Per-BATCH log file (timestamp). The beacon-engine AND dash-streamer logs are
+# merged into THIS single file via logutil.share_handler(log, _fh) (see main),
+# so a run writes ONE file instead of a simulated_watch + beacon_engine pair.
 BATCH = datetime.now().strftime('%Y%m%d_%H%M%S')
 
 if not log.handlers:
@@ -200,87 +204,7 @@ def get_media_map(session, uid, want_mids, days=30, max_pages=12):
     return mmap
 
 
-def pick_dash_urls(media_info, quality="dash_hd", with_audio=True):
-    """Return list of (label, url) DASH urls to fetch, in browser order.
-    Browser fetched dash_hd (video) + dash_audio (audio). Default mirrors that."""
-    by_label = {}
-    for pl in media_info.get("playback_list") or []:
-        info = pl.get("play_info") or {}
-        if info.get("url"):
-            by_label[info.get("label")] = info["url"]
-    urls = []
-    # video track: prefer requested quality, else fall back
-    for q in (quality, "dash_720p", "dash_hd"):
-        if q in by_label:
-            urls.append((q, by_label[q]))
-            break
-    if with_audio and "dash_audio" in by_label:
-        urls.append(("dash_audio", by_label["dash_audio"]))
-    # If no DASH at all (e.g. progressive-only page), fall back to mp4_720p_mp4
-    if not urls and media_info.get("mp4_720p_mp4"):
-        urls.append(("mp4_720p_mp4", media_info["mp4_720p_mp4"]))
-    return urls
 
-
-# --------------------------------------------------------------------------
-# DASH byte fetch: chunked Range GETs returning 206, exactly like the browser
-# --------------------------------------------------------------------------
-class DashStreamer:
-    """Streams ONE signed DASH url via byte-range GETs (206 Partial Content).
-    Mirrors the browser's segmented download; `next_chunk()` pulls one range."""
-
-    def __init__(self, session, url, label, chunk, max_bytes=None):
-        self.session = session
-        self.url = url
-        self.label = label
-        self.chunk = chunk
-        self.max_bytes = max_bytes
-        self.pos = 0
-        self.total = None
-        self.fetched = 0
-        self.done = False
-
-    def next_chunk(self):
-        if self.done:
-            return 0
-        if self.max_bytes and self.fetched >= self.max_bytes:
-            self.done = True
-            return 0
-        end = self.pos + self.chunk - 1
-        headers = {"User-Agent": UA, "Referer": CREATOR_REF,
-                   "Origin": "https://weibo.com",
-                   "Range": "bytes=%d-%d" % (self.pos, end)}
-        try:
-            r = self.session.get(self.url, headers=headers, timeout=30000, stream=True)
-            status = r.status_code
-            cr = r.headers.get("Content-Range") or r.headers.get("content-range")
-            if cr and "/" in cr:
-                try:
-                    self.total = int(cr.split("/")[-1])
-                except ValueError:
-                    pass
-            data = r.content  # Range responses are small per request
-            n = len(data)
-        except Exception as ex:
-            log.warning("  [dash][%s] chunk error @%d: %s" % (self.label, self.pos, ex))
-            self.done = True
-            return 0
-        if status not in (206, 200):
-            log.warning("  [dash][%s] unexpected status %s @%d (url expires?)" % (self.label, status, self.pos))
-            self.done = True
-            return 0
-        self.fetched += n
-        self.pos += n
-        if (self.total and self.pos >= self.total) or n == 0:
-            self.done = True
-        log.debug("  [dash][%s] status=%s bytes=%d-%d total=%s fetched=%d"
-                  % (self.label, status, self.pos - n, self.pos - 1, self.total, self.fetched))
-        return n
-
-    def drain(self):
-        while not self.done:
-            if self.next_chunk() == 0:
-                break
 
 
 # --------------------------------------------------------------------------
@@ -455,13 +379,14 @@ def main():
         args.rounds = 1
 
     sess = _viewer_session()
-    # Point the quick_watch beacon logger at THIS batch's timestamped file so the
-    # verbose request/response dumps correlate with this run (not the daily file).
-    set_log_suffix(BATCH)
+    # Merge the beacon-engine AND dash-streamer logs into this run's single file
+    # (one log for the whole simulated_watch run) instead of separate files.
+    share_handler(_beacon_log, _fh)
+    share_handler(_dash_log, _fh)
     results = []
     t0 = time.time()
 
-    # ---- 30-day window: REUSE quick_watch_recent.get_video_list (common module) ----
+    # ---- 30-day window: REUSE beacon_engine.get_video_list (common module) ----
     log.info("=== 30-day window (reuse get_video_list, days=%d) ===", args.days)
     window, wsource = get_video_list(args.days)
     if args.limit and args.limit > 0:
@@ -507,6 +432,7 @@ def main():
     wmap = get_media_map(sess, args.uid, want_mids, args.days)
 
     ok = fail = 0
+    watched_seconds = 0  # total duration of the videos actually watched
     for rnd in range(1, args.rounds + 1):
         log.info("=== round %d/%d ===", rnd, args.rounds)
         for vi, v in enumerate(window, 1):
@@ -531,12 +457,16 @@ def main():
             g = watch_one(sess, video, results, args)
             if g is True:
                 ok += 1
+                watched_seconds += int(video["duration"] or 0)
             elif g is False:
                 fail += 1
 
     # ---- audit ----
-    errs = [r for r in results if r.get("status") not in (200,) or r.get("error")]
-    log.info("=== AUDIT: %d beacon/DASH calls, HTTP!=200 or error: %d ===",
+    # 2xx == success: RUM answers 202 Accepted and DASH answers 206 Partial
+    # Content, so only a non-2xx status (or a recorded exception) is an anomaly.
+    # (Comparing against 200 alone flagged every rum beacon -- pure noise.)
+    errs = [r for r in results if r.get("error") or not _http_ok(r)]
+    log.info("=== AUDIT: %d recorded calls, non-2xx or error: %d ===",
              len(results), len(errs))
     for r in errs[:20]:
         log.warning("  ! %s mid=%s sec=%s status=%s err=%s", r.get("endpoint"),
@@ -559,8 +489,11 @@ def main():
     elapsed = time.time() - t0
     log.info("=== DONE videos=%d rounds=%d ok=%d fail=%d elapsed=%.1fs ===",
              len(window), args.rounds, ok, fail, elapsed)
+    log.info("=== TIMING script_elapsed=%.1fs (%.1f min) | watched_video=%.0fs (%.1f min) ===",
+             elapsed, elapsed / 60.0, watched_seconds, watched_seconds / 60.0)
     return {"videos": len(window), "rounds": args.rounds, "ok": ok, "fail": fail,
-            "elapsed_seconds": round(elapsed, 2)}
+            "elapsed_seconds": round(elapsed, 2),
+            "watched_seconds": int(watched_seconds)}
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ the server credits PLAY COUNT / PLAY DURATION.
 ==========================================================================
 Playback-report CHANNELS, selectable with --channels
 --------------------------------------------------------------------------
-The old `quick_watch_recent.py` only emitted CHANNEL 1 (play_history/report.json),
+The old `beacon_engine.py` only emitted CHANNEL 1 (play_history/report.json),
 the `seconds` heartbeat. A real 2026-09-18 watch HAR shows the browser actually
 fires FOUR report channels while watching:
 
@@ -49,7 +49,7 @@ CONTENT is identical regardless of pace. Only the wall-clock spacing changes:
   * --delay 30.0  (FastWatch-30s): replay at the server's real reporting cadence
 
 ==========================================================================
-Selection (matches the old quick_watch_recent.py)
+Selection (matches the old beacon_engine.py)
 --------------------------------------------------------------------------
     videos = author videos published in last `days` days (default 30), fetched
              LIVE at run time via the creator-center getVideoList (AUTHOR_UID
@@ -68,7 +68,7 @@ Two run shapes, both honoring --channels:
 All numbers are CLI-configurable (see --help).
 
 Usage:
-  venvs/weibo-env/Scripts/python.exe src/experiment/fetch/quick_watch_recent.py \
+  venvs/weibo-env/Scripts/python.exe src/experiment/fetch/beacon_engine.py \
       [--days 30] [--rounds 10] [--delay 1.0] [--cadence 30] \
       [--channels single|dual|triple|quad] [--mid <mid>] \
       [--with-aggregate] [--dry-run]
@@ -103,15 +103,13 @@ _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, _src_root)
 
 from auth import Auth
-from playback_beacons import (send_playstatistics as _bc_send_playstatistics,
-                              send_read_log as _bc_send_read_log)
 from logutil import setup as _setup_logging
 _setup_logging()  # idempotent; configures the shared weibo.log for other modules
 # Dedicated logger for THIS script: verbose per-request dumps go to a SEPARATE
-# DAILY file (src/log/watch/quick_watch_YYYYMMDD.log) via a FileHandler. Isolation
+# DAILY file (src/log/watch/beacon_engine_YYYYMMDD.log) via a FileHandler. Isolation
 # is by log FILE, not by stdout/stderr stream -- so we intentionally attach only a
 # FileHandler here. propagate=False keeps these dumps out of the shared weibo.log.
-log = logging.getLogger('quick_watch')
+log = logging.getLogger('beacon_engine')
 log.setLevel(logging.DEBUG)
 log.propagate = False
 _qw_fmt = logging.Formatter(
@@ -127,7 +125,7 @@ _qw_suffix = None
 
 def _qw_log_path():
     name = _qw_suffix or datetime.now().strftime('%Y%m%d')
-    return os.path.join(_qw_dir, 'quick_watch_%s.log' % name)
+    return os.path.join(_qw_dir, 'beacon_engine_%s.log' % name)
 
 
 if not log.handlers:
@@ -157,12 +155,13 @@ def set_log_suffix(suffix):
     log.addHandler(fh)
     return path
 
+
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VIDEO_DATA = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
 # All watch run logs live under src/data/watch/ (kept apart from the shared
 # author_videos.json DB and the diag/crawl outputs that also live in src/data).
 WATCH_DIR = os.path.join(SRC_DIR, "data", "watch")
-LOG_PATH = os.path.join(WATCH_DIR, "quick_watch_log.json")
+LOG_PATH = os.path.join(WATCH_DIR, "beacon_engine_log.json")
 
 REPORT_URL = "https://multimedia.api.weibo.com/2/multimedia/user/play_history/report.json"
 H5PLAYLOG_URL = "https://weibo.com/ajax/log/h5playlog"
@@ -199,7 +198,7 @@ def _redact_headers(headers):
 
 def _log_http(r, label):
     """Dump the FULL request + response (status, headers, body) of one HTTP call
-    to the quick_watch logger for BOTH channels (file only via DEBUG)."""
+    to the beacon_engine logger for BOTH channels (file only via DEBUG)."""
     req = getattr(r, 'request', None)
     log.debug("  [%s] >>> REQUEST %s %s" % (label,
                getattr(req, 'method', 'POST'), getattr(req, 'url', r.url)))
@@ -224,7 +223,7 @@ def _log_http(r, label):
 
 def _daily_log_path():
     day = datetime.now(timezone.utc).strftime("%Y%m%d")
-    return os.path.join(WATCH_DIR, "quick_watch_log_%s.jsonl" % day)
+    return os.path.join(WATCH_DIR, "beacon_engine_log_%s.jsonl" % day)
 
 
 def _archive_current_log():
@@ -246,10 +245,10 @@ def _archive_current_log():
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     archive_dir = os.path.join(WATCH_DIR, "archive")
     os.makedirs(archive_dir, exist_ok=True)
-    dst = os.path.join(archive_dir, "quick_watch_log_%s.json" % stamp)
+    dst = os.path.join(archive_dir, "beacon_engine_log_%s.json" % stamp)
     if os.path.exists(dst):
         dst = os.path.join(archive_dir,
-                           "quick_watch_log_%s.%d.json" % (stamp, int(time.time())))
+                           "beacon_engine_log_%s.%d.json" % (stamp, int(time.time())))
     shutil.copy2(LOG_PATH, dst)
     return dst
 
@@ -599,12 +598,87 @@ def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
             status=status, error_code=ec, error=err, body=body)
 
 
+# --- CHANNEL 3 + CHANNEL 4 low-level builders -------------------------------------
+# Moved here from the now-deleted playback_beacons.py so ALL six channels live in
+# this one module. quick_watch_delay_probe.py imports send_playstatistics from here.
+PLAYSTAT_URL = "https://weibo.com/aj/video/playstatistics?ajwvr=6"
+PLAYSTAT_SALT = "yixiong&zhaolong5"  # PlayStatistics._md5Log salt (NOT "encryptedString")
+READ_URL = "https://weibo.com/ajax/log/read"  # PC_real_read endpoint
+_PS_COUNT = [0]  # faithful replica of PlayStatistics._logKey()'s `count++`
+
+
+def md5(s):
+    return hashlib.md5(s.encode("utf-8")).hexdigest()
+
+
+def build_playstatistics(mid, media_id, viewer_uid):
+    """Return (data, key, sig) for ONE playstatistics beacon, exactly as the
+    PlayStatistics video.js plugin builds it.
+
+    data = JSON.stringify({uid, mid, keys, type:"feedvideo", uuid, media_id})
+    key  = Log_<rand5>_<ts(ms)><rand4><count>
+    sig  = md5(data + key + "yixiong&zhaolong5")
+    """
+    rk = random.randint(10 ** 12, 10 ** 13 - 1)
+    data = ('{"uid":%s,"mid":"%s","keys":%d,"type":"feedvideo",'
+            '"uuid":%d,"media_id":"%s"}' % (viewer_uid, mid, rk, rk, media_id))
+    ts = int(time.time() * 1000)
+    rand4 = random.randint(0, 9999)
+    key = "Log_%s_%d%d%d" % (_rand5(), ts, rand4, _PS_COUNT[0])
+    _PS_COUNT[0] += 1
+    sig = md5(data + key + PLAYSTAT_SALT)
+    return data, key, sig
+
+
+def _xsrf_from(session):
+    """XSRF-TOKEN cookie value ('' when absent) required by weibo.com/ajax endpoints."""
+    try:
+        return session.cookies.get("XSRF-TOKEN", domain="weibo.com") or ""
+    except Exception:
+        try:
+            return session.cookies.get("XSRF-TOKEN") or ""
+        except Exception:
+            return ""
+
+
+def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5, referer=None):
+    """POST the playstatistics beacon ONCE. Returns (http_status, error_code, response).
+
+    `referer` defaults to a bare "https://weibo.com/"; callers pass the real watch
+    page for fidelity. Requires `X-Xsrf-Token` (from the XSRF-TOKEN cookie) +
+    `x-requested-with`. The server tolerates a wrong sig, but we send the EXACT
+    correct one (recovered from the weibo-pro-next bundle, 2026-09-21).
+    """
+    data, key, sig = build_playstatistics(mid, media_id, viewer_uid)
+    headers = {"User-Agent": UA,
+               "Referer": referer or "https://weibo.com/",
+               "x-requested-with": "XMLHttpRequest"}
+    xsrf = _xsrf_from(session)
+    if xsrf:
+        headers["X-Xsrf-Token"] = xsrf
+    try:
+        r = session.post(PLAYSTAT_URL,
+                         files={"data": (None, data),
+                                "key": (None, key),
+                                "sig": (None, sig)},
+                         headers=headers, timeout=20000)
+        status = r.status_code
+        try:
+            j = r.json()
+            ec = j.get("error_code") or j.get("errorCode")
+        except Exception:
+            ec = None
+        return status, ec, r
+    except Exception as ex:
+        return None, str(ex), None
+
+
 def _post_playstatistics_step(session, mid, media_id, results):
     """CHANNEL 3: one `aj/video/playstatistics?ajwvr=6` beacon at play start.
-    Delegates to the shared `playback_beacons.send_playstatistics` (canonical
-    algorithm recovered from the weibo-pro-next bundle, verified 2026-09-21)."""
-    status, ec, r = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, 0.5,
-                                            referer=WATCH_REFERER)
+    Uses the local `send_playstatistics` (canonical algorithm recovered from the
+    weibo-pro-next bundle, verified 2026-09-21)."""
+    status, ec, r = send_playstatistics(session, mid, media_id, VIEWER_UID, 0.5,
+                                        referer=WATCH_REFERER)
     log.info("  [playstats] mid=%s media_id=%s -> %s err=%s"
              % (mid, media_id, status, ec))
     if r is not None:
@@ -613,17 +687,87 @@ def _post_playstatistics_step(session, mid, media_id, results):
             status=status, error_code=ec)
 
 
+def build_read_log(mid, read_ms, rid=None):
+    """Return the JSON `data` string for ONE PC_real_read beacon.
+
+    Recovered from the 2026-09-18 real-watch HAR: the browser fires
+    `act=PC_real_read` every ~15s while a post/video is on screen, with a
+    CUMULATIVE `read_duration` (ms). For a VIDEO post this read dwell == watch
+    time, so it is the strongest candidate for what the creator-center PLAY
+    DURATION actually aggregates (h5playlog's `valid_play_duration` did NOT
+    credit in the 2026-09-21 triple test). No sig/key; body is
+    {"data": "<json-array-as-string>"}.
+
+    CRITICAL (2026-09-24, waterfall HAR): `rid` MUST be STABLE across every
+    heartbeat of ONE watch session. The browser keeps it byte-identical for the
+    whole watch (e.g. "0_0_0_5246141095656271609_0_0_0" on all 5 periodic
+    reads). The server aggregates cumulative `read_duration` PER `rid`; a fresh
+    random `rid` per beacon fragments the session into many 30s stubs and the
+    watch is never credited. Pass a caller-owned `rid` (generated once per
+    video) to fix this.
+    """
+    if rid is None:
+        rid = "0_0_0_%d_0_0_0" % random.randint(10 ** 18, 10 ** 19 - 1)
+    rec = {
+        "act": "PC_real_read",
+        "itemid": str(mid),
+        "type": "mblog",
+        "rid": rid,
+        "page": 0,
+        "root_id": str(mid),
+        "analysis_extra": "",
+        "ext": "",
+        "PC_real_read": 1,
+        "__date": int(time.time()),
+        "duration": int(read_ms),
+        "read_duration": int(read_ms),
+    }
+    return json.dumps([rec], ensure_ascii=False)
+
+
+def send_read_log(session, mid, read_ms, rid=None, delay=0.5, referer=None):
+    """POST one PC_real_read beacon. Returns (http_status, error_code, response).
+
+    `rid` is reused for the whole watch session (see build_read_log). Generated
+    once by the caller and threaded through every heartbeat.
+
+    `referer` defaults to a bare "https://weibo.com/"; callers pass the real
+    watch page (https://weibo.com/u/<AUTHOR>?tabtype=newVideo) for fidelity.
+
+    Requires `X-Xsrf-Token` (from the XSRF-TOKEN cookie) + `x-requested-with`
+    like the other weibo.com/ajax/log/* endpoints (else 403).
+    """
+    payload = {"data": build_read_log(mid, read_ms, rid)}
+    headers = {"User-Agent": UA,
+               "Referer": referer or "https://weibo.com/",
+               "x-requested-with": "XMLHttpRequest"}
+    xsrf = _xsrf_from(session)
+    if xsrf:
+        headers["X-Xsrf-Token"] = xsrf
+    try:
+        r = session.post(READ_URL, json=payload, headers=headers, timeout=20000)
+        status = r.status_code
+        try:
+            j = r.json()
+            ec = j.get("error_code") or j.get("errorCode")
+        except Exception:
+            ec = None
+        return status, ec, r
+    except Exception as ex:
+        return None, str(ex), None
+
+
 def _post_read_step(session, mid, read_ms, results, rid=None):
     """CHANNEL 4: one `ajax/log/read` (PC_real_read) beacon, read_duration = cumulative
     watched ms. Recovered from the 2026-09-18 HAR; the strongest candidate for the
     creator-center PLAY DURATION source (h5playlog `valid_play_duration` did NOT credit
     in the 2026-09-21 triple test). No sig/key; body is {"data": "<array-string>"}.
 
-    `rid` is a STABLE per-watch session id (see playback_beacons.build_read_log) --
+    `rid` is a STABLE per-watch session id (see build_read_log above) --
     pass the same value for every heartbeat of one video so the server aggregates
     the cumulative read_duration into a single credited watch.
     """
-    status, ec, r = _bc_send_read_log(session, mid, read_ms, rid=rid,
+    status, ec, r = send_read_log(session, mid, read_ms, rid=rid,
                                   referer=WATCH_REFERER)
     log.info("  [read] mid=%s read_ms=%d rid=%s -> %s err=%s"
              % (mid, read_ms, (rid or "?"), status, ec))
@@ -846,7 +990,7 @@ def snapshot_aggregates(tag):
             "yesterday": yest,
             "last_7d": sev.get("last_7d", {}),
             "last_30d": sev.get("last_30d", {})}
-    path = os.path.join(SRC_DIR, "data", "watch", "quick_watch_%s.json" % tag)
+    path = os.path.join(SRC_DIR, "data", "watch", "beacon_engine_%s.json" % tag)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
@@ -856,18 +1000,30 @@ def _val(snap, period, key):
     return (snap.get(period, {}).get(key, {}) or {}).get("value")
 
 
+def _http_ok(rec):
+    """True when a recorded call answered 2xx.
+
+    RUM answers 202 Accepted and DASH answers 206 Partial Content, so comparing
+    a recorded status against 200 alone is wrong (it flagged every rum beacon).
+    """
+    try:
+        return 200 <= int(rec.get("status")) < 300
+    except (TypeError, ValueError):
+        return False
+
+
 def _write_audit(results, channels):
     run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     res_path = os.path.join(WATCH_DIR,
-                            "quick_watch_responses_%s.jsonl" % run_stamp)
+                            "beacon_engine_responses_%s.jsonl" % run_stamp)
     with open(res_path, "w", encoding="utf-8") as f:
         for rec in results:
             f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
     log.info("=== SERVER RESPONSE AUDIT (%d calls, channels=%s) ===",
              len(results), channels)
     log.info("  log -> %s", res_path)
-    errs = [r for r in results if r.get("status") not in (200,) or r.get("error")]
-    log.info("  HTTP!=200 or exception: %d", len(errs))
+    errs = [r for r in results if r.get("error") or not _http_ok(r)]
+    log.info("  non-2xx or exception: %d", len(errs))
     for r in errs:
         log.warning("   ! %s mid=%s sec=%s status=%s err=%s body=%s",
                     r.get("endpoint"), r.get("mid"), r.get("seconds"),
@@ -1042,7 +1198,7 @@ def main():
             replay_one(sess, mid, oid, dur, seq, args.delay, play_time,
                        results, channels, rid=v.get("rid"))
             sent = results[before:]
-            if not all(s.get("status") == 200 for s in sent):
+            if not all(_http_ok(s) for s in sent):
                 good = False
             total_watch_seconds += full
         log.info("[%s] DONE mid=%s", tag, mid)

@@ -106,3 +106,22 @@ def dump_response(resp, label='', level=logging.WARNING):
         lines.append('    %s: %s' % (k, v))
     lines.append('  [response %s' % _summarize_body(resp))
     log.log(level, '\n'.join(lines))
+
+
+def share_handler(logger, handler):
+    """Point `logger` at an orchestrator-owned `handler` so several modules'
+    logs merge into ONE file.
+
+    Drops any FileHandler `logger` already owns (e.g. its own daily file) so a
+    batch run writes a single file instead of one per module. Used by
+    simulated_watch to merge the beacon_engine + dash_streamer logs into its
+    per-batch log file.
+    """
+    for h in list(logger.handlers):
+        if isinstance(h, logging.FileHandler):
+            try:
+                h.close()
+            except Exception:
+                pass
+            logger.removeHandler(h)
+    logger.addHandler(handler)

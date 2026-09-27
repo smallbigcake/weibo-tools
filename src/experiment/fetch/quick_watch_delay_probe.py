@@ -63,7 +63,7 @@ SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file
 sys.path.insert(0, SRC_DIR)
 sys.path.insert(0, os.path.join(SRC_DIR, 'experiment', 'fetch'))
 from auth import Auth
-from playback_beacons import send_playstatistics as _bc_send_playstatistics
+from beacon_engine import send_playstatistics as _bc_send_playstatistics
 
 REPORT_URL = "https://multimedia.api.weibo.com/2/multimedia/user/play_history/report.json"
 GETVIDEO_URL = "https://weibo.com/ajax/multimedia/getVideoList"
@@ -111,7 +111,7 @@ def _ajax_headers(session):
 
 def send_playstatistics(session, mid, media_id, delay):
     """THIRD playback beacon (the missing one). Fired ONCE per video at play
-    start. Delegates to the shared `playback_beacons.send_playstatistics`
+    start. Delegates to `beacon_engine.send_playstatistics`
     (canonical algorithm recovered from the weibo-pro-next bundle, verified
     2026-09-21 against the 2026-09-18 HAR sig)."""
     status, ec, _r = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, delay)
