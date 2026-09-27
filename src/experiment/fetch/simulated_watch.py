@@ -91,18 +91,25 @@ CREATOR_REF = "https://weibo.com/"
 log = logging.getLogger('simulated_watch')
 log.setLevel(logging.DEBUG)
 log.propagate = False
-# Per-BATCH log file (timestamp). The beacon-engine AND dash-streamer logs are
-# merged into THIS single file via logutil.share_handler(log, _fh) (see main),
-# so a run writes ONE file instead of a simulated_watch + beacon_engine pair.
-BATCH = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-if not log.handlers:
+
+def setup_batch_log():
+    """Create this run's single shared log file and merge the beacon-engine +
+    dash-streamer loggers into it (one file for the whole run instead of a
+    separate simulated_watch + beacon_engine pair). Returns the FileHandler so
+    callers (e.g. simulated_watch_targeted) can also attach it to their logger.
+    """
+    BATCH = datetime.now().strftime('%Y%m%d_%H%M%S')
     _fmt = logging.Formatter('%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s')
     _dir = os.path.join(SRC_DIR, 'log', 'watch')
     _fh = logging.FileHandler(os.path.join(_dir, 'simulated_watch_%s.log' % BATCH), encoding='utf-8')
     _fh.setLevel(logging.DEBUG)
     _fh.setFormatter(_fmt)
     log.addHandler(_fh)
+    # merge beacon_engine + dash_streamer logs into this one file
+    share_handler(_beacon_log, _fh)
+    share_handler(_dash_log, _fh)
+    return _fh
 
 
 # --------------------------------------------------------------------------
@@ -379,10 +386,7 @@ def main():
         args.rounds = 1
 
     sess = _viewer_session()
-    # Merge the beacon-engine AND dash-streamer logs into this run's single file
-    # (one log for the whole simulated_watch run) instead of separate files.
-    share_handler(_beacon_log, _fh)
-    share_handler(_dash_log, _fh)
+    setup_batch_log()  # single shared log file; merges beacon + dash loggers
     results = []
     t0 = time.time()
 
@@ -408,6 +412,19 @@ def main():
         log.warning("no videos in 30-day window; nothing to do.")
         return {"ok": 0, "fail": 0, "videos": 0}
 
+    return run_watch(sess, window, args, results, t0)
+
+
+def run_watch(session, window, args, results, t0):
+    """Core simulated-watch orchestration shared by simulated_watch.main() and the
+    targeted experiment script (simulated_watch_targeted.py). Re-fetches a fresh
+    signed DASH URL per video (CDN URLs expire mid-run), fires the playback
+    beacons in browser order, then audits and optionally snapshots the
+    creator-center aggregates."""
+    if not window:
+        log.warning("no videos in window; nothing to do.")
+        return {"ok": 0, "fail": 0, "videos": 0}
+
     want_mids = [v["mid"] for v in window]
 
     if args.dry_run:
@@ -429,7 +446,7 @@ def main():
     # Browser-faithful video metadata from the REAL endpoint (waterfall pagination),
     # built once; only used for oid/duration. The expiring CDN URL is re-fetched
     # fresh per video (see loop) because a full round spans hours (> URL ttl=3600s).
-    wmap = get_media_map(sess, args.uid, want_mids, args.days)
+    wmap = get_media_map(session, args.uid, want_mids, args.days)
 
     ok = fail = 0
     watched_seconds = 0  # total duration of the videos actually watched
@@ -437,7 +454,7 @@ def main():
         log.info("=== round %d/%d ===", rnd, args.rounds)
         for vi, v in enumerate(window, 1):
             base = wmap.get(v["mid"]) or {}
-            mi = get_media_via_statuses(sess, v["mid"])   # fresh signed DASH URL
+            mi = get_media_via_statuses(session, v["mid"])   # fresh signed DASH URL
             if not mi:
                 mi = base.get("media_info") or {}          # fallback (may be expired)
             if not mi:
@@ -454,7 +471,7 @@ def main():
             log.info("=== [WATCH] round %d/%d  video %d/%d  mid=%s  title=%s ===",
                      rnd, args.rounds, vi, len(window), v["mid"],
                      (video["title"] or "")[:80])
-            g = watch_one(sess, video, results, args)
+            g = watch_one(session, video, results, args)
             if g is True:
                 ok += 1
                 watched_seconds += int(video["duration"] or 0)
