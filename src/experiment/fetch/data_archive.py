@@ -6,6 +6,9 @@ current file into <live_dir>/archive/<stem>_<UTC-stamp>.json, using the
 file's own meta.updated_at as the timestamp so the archive name reflects
 when that snapshot was actually taken (not when it was archived).
 
+Stamp format (human-readable, fixed-width, lexicographically sortable,
+Windows-safe -- no colons): 2026-09-27_06-25-37  (UTC, date_time).
+
 The archive is a plain copy (shutil.copy2) and is skipped if an archive
 with the same name already exists, so re-running never duplicates history.
 
@@ -31,11 +34,11 @@ def _stamp_from_meta(live_path):
             dt = datetime.fromisoformat(ts)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            return dt.astimezone(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
     except Exception:
         pass
     mtime = os.path.getmtime(live_path)
-    return datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
 
 
 def archive_existing(live_path):

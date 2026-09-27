@@ -6,24 +6,34 @@ endpoints the single-video detail page fires, all carrying
 video_oid + mid + blogger_uid:
 
   datavidnew?video_oid=<oid>&mid=<mid>&blogger_uid=<uid>            -> weibo_info
-  datavidnew?...&tab=traffic                                      -> last-7d totals
+  datavidnew?...&tab=traffic                                      -> lifetime totals (API name: 总播放量 / 总播放时长)
   datavidnew?...&tab=diagnosis                                    -> diagnosis
   datavid_item?item_id=dt_onevid_score                            -> clarity score
   datavid_item?item_id=dt_onevid_playratio                        -> play ratio
   datavid_item?item_id=dt_onevid_scene                            -> traffic source
   datavid_item?item_id=dt_onevid_portrait                         -> audience portrait
+  datanew_selectdata?module=vid_one_core&period=7                 -> post-publish 7-day DAILY (play_count / play_totallength)
 
 All JSON keys are English and follow the ORIGINAL API field names. Chinese
 appears only as values (e.g. label "关注", text "作品画质清晰度过低").
 
 Output: src/data/video/author_video_stats.json
-  { meta:{...}, videos:{ <mid>: { mid, video_oid, weibo_info, traffic_7d,
-                                diagnosis, clarity_score, play_ratio,
-                                traffic_source, portrait } } }
+  { meta:{...}, videos:{ <mid>: {
+        mid, video_oid, weibo_info,
+        total_traffic:      {period, play_count, play_totallength,
+                             play_totallength_unit, play_totallength_sec}   # LIFETIME totals (API 总播放量/总播放时长)
+        publish_week_daily: {play_count:[{date,number}],                     # post-publish 7-day DAILY (datanew_selectdata?period=7)
+                             play_totallength:[{date,number,unit}]}
+        interactions:      {reposts_count, comments_count,
+                             attitudes_count}   # from author_videos.json.statistics (covers ALL videos)
+        diagnosis, clarity_score, play_ratio, traffic_source, portrait } } }
 
-  traffic_7d.play_totallength is reported by the API in an auto-scaling unit
-  (秒/分钟/小时). We keep the raw value + its number_unit, AND a normalized
-  play_totallength_sec (seconds) so values are comparable across videos.
+  Field renames: the OLD key "traffic_7d" was renamed to "total_traffic"
+  because the data is the video's LIFETIME totals (API: 总播放量/总播放时长),
+  NOT a 7-day window. The "7" was merely the only select_subitems key.
+  The real post-publish 7-day data lives under "publish_week_daily".
+  play_totallength is reported in an auto-scaling unit (秒/分钟/小时); we keep
+  the raw value + number_unit AND a normalized play_totallength_sec (seconds).
 
 Resumable: mids already present in the output file are skipped, so the script
 can be re-run to continue after an interruption. Pass --force to re-crawl every
@@ -33,6 +43,7 @@ Usage:
   venvs/test-env/Scripts/python.exe src/experiment/crawl/crawl_video_stats.py [--limit N] [--delay 0.8]
 """
 import os as _os
+import re
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
@@ -165,11 +176,86 @@ def parse_traffic(traffic_json):
     unit = pl.get("number_unit")
     sec = num * UNIT_TO_SEC[unit] if (num is not None and unit in UNIT_TO_SEC) else None
     return {
-        "period": "last_7d",
+        "period": "total",  # API returns lifetime totals (总播放量/总播放时长), not a 7-day window
         "play_count": pc.get("number"),
         "play_totallength": num,
         "play_totallength_unit": unit,
         "play_totallength_sec": sec,  # normalized, computation-only (see comment above)
+    }
+
+
+def _age_days(create_time):
+    """Age of a video in days from author_videos.json create_time (epoch ms)."""
+    if not create_time:
+        return None
+    try:
+        ct = datetime.fromtimestamp(create_time / 1000, tz=timezone.utc)
+    except Exception:
+        return None
+    return (datetime.now(timezone.utc) - ct).days
+
+
+def _extract_unit(resp):
+    """Pull the play_totallength unit (e.g. 分钟) out of the API desc string
+    like '（单位：分钟）'."""
+    if not resp:
+        return None
+    desc = ((resp.get("data") or {}).get("desc") or "")
+    m = re.search(r"单位[：:]\s*(\S+?)\s*[)）]", desc)
+    if m:
+        return m.group(1)
+    return None
+
+
+def parse_select_series(resp, item_subtype):
+    """Parse a datanew_selectdata?period=7 response into a list of
+    {date, number} for the given item_subtype (post-publish 7-day daily)."""
+    if not resp:
+        return None
+    groups = (resp.get("data") or {}).get("groups") or {}
+    series = groups.get("7") or groups.get("默认") or {}
+    lst = series.get(item_subtype) or []
+    out = []
+    for e in lst:
+        n = e.get("number")
+        try:
+            num = float(n)
+        except (TypeError, ValueError):
+            num = None
+        out.append({"date": e.get("date"), "number": num})
+    return out
+
+
+def fetch_publish_week(a, oid, mid, delay):
+    """Fetch the post-publish 7-day DAILY series (play_count + play_totallength)
+    from datanew_selectdata?period=7 and return
+    {play_count:[{date,number}], play_totallength:[{date,number,unit}]}."""
+    pw = {"play_count": [], "play_totallength": []}
+    for item_subtype, store_key in (("play_count", "play_count"),
+                                    ("play_totallength", "play_totallength")):
+        params = {"module": "vid_one_core", "period": 7,
+                  "item_type": "videoonecore", "item_subtype": item_subtype,
+                  "select_oid": oid, "blogger_uid": AUTHOR_UID}
+        resp = _get(a, "/datanew_selectdata", params, delay, tag=mid)
+        series = parse_select_series(resp, item_subtype) or []
+        unit = _extract_unit(resp) if item_subtype == "play_totallength" else None
+        pw[store_key] = [{"date": e["date"], "number": e["number"],
+                           **({"unit": unit} if unit else {})} for e in series]
+    return pw
+
+
+def interactions_from(vitem):
+    """Cumulative reposts/comments/attitudes from author_videos.json.statistics
+    (covers ALL videos, unlike weibo_info which the API omits for old videos)."""
+    if not isinstance(vitem, dict):
+        return None
+    st = vitem.get("statistics")
+    if not isinstance(st, dict):
+        return None
+    return {
+        "reposts_count": st.get("reposts_count"),
+        "comments_count": st.get("comment_count"),
+        "attitudes_count": st.get("attitude_count"),
     }
 
 
@@ -240,7 +326,7 @@ def _normalize_empty_keys(o):
     return o
 
 
-def crawl_one(a, oid, mid, delay):
+def crawl_one(a, oid, mid, delay, vitem=None, skip_pubweek=False):
     p = {"video_oid": oid, "mid": mid, "blogger_uid": AUTHOR_UID}
     default = _get(a, "/datavidnew", p, delay, tag=mid)
     traffic = _get(a, "/datavidnew", {**p, "tab": "traffic"}, delay, tag=mid)
@@ -253,17 +339,35 @@ def crawl_one(a, oid, mid, delay):
                                       "item_id": "dt_onevid_scene"}, delay, tag=mid)
     portrait = _get(a, "/datavid_item", {**p, "is_new": "1",
                                          "item_id": "dt_onevid_portrait"}, delay, tag=mid)
+    pubweek = None if skip_pubweek else fetch_publish_week(a, oid, mid, delay)
     return {
         "mid": mid,
         "video_oid": oid,
         "weibo_info": parse_weibo_info(default),
-        "traffic_7d": parse_traffic(traffic),
+        "total_traffic": parse_traffic(traffic),
+        "publish_week_daily": pubweek,
+        "interactions": interactions_from(vitem),
         "diagnosis": parse_diagnosis(diagnosis),
         "clarity_score": parse_clarity(score),
         "play_ratio": parse_playratio(playratio),
         "traffic_source": parse_scene(scene),
         "portrait": parse_portrait(portrait),
     }
+
+
+def merge_static(new_rec, old_rec):
+    """Preserve STATIC fields the API stops returning on re-crawl.
+
+    The creator-center API only returns `weibo_info` for recently-published
+    videos (empirically within ~24 days). On a --force re-crawl after the video
+    ages past that window, the fresh parse yields None and would otherwise
+    OVERWRITE (delete) the previously-captured value. Keep the old weibo_info
+    instead. Dynamic fields (traffic_7d, clarity_score, play_ratio, ...) are NOT
+    touched here and keep refreshing normally.
+    """
+    if new_rec.get("weibo_info") is None and old_rec.get("weibo_info"):
+        new_rec["weibo_info"] = old_rec["weibo_info"]
+    return new_rec
 
 
 def main():
@@ -276,14 +380,31 @@ def main():
     args = ap.parse_args()
 
     videos = json.load(open(VIDEOS_JSON, encoding="utf-8"))["videos"]
-    # resume (unless --force)
-    if os.path.exists(OUT_JSON) and not args.force:
+    # Always load the previous snapshot: used for resume-skip AND as a merge
+    # source so a --force re-crawl never NULLs out static fields (e.g.
+    # weibo_info) that the API stops returning for older videos.
+    if os.path.exists(OUT_JSON):
         existing = json.load(open(OUT_JSON, encoding="utf-8"))
-        done = set(existing.get("videos", {}).keys())
-        store = existing
+        prev_videos = existing.get("videos", {})
     else:
-        done = set()
+        existing = {}
+        prev_videos = {}
+    done = set(prev_videos.keys())
+
+    def _needs_refresh(mid):
+        # a normal (non-force) run re-crawls any video still missing the newer
+        # fields, so every snapshot stays in the latest format without --force.
+        rec = prev_videos.get(mid) or {}
+        return ("publish_week_daily" not in rec) or ("interactions" not in rec)
+
+    if args.force:
         store = {"meta": {}, "videos": {}}
+        queue = list(videos)
+    else:
+        store = existing
+        queue = [v for v in videos
+                 if (v.get("mid_str") or v.get("mid")) not in done
+                 or _needs_refresh(str(v.get("mid_str") or v.get("mid")))]
 
     a = Auth()
     a.uid = AUTHOR_UID
@@ -294,8 +415,10 @@ def main():
     if archived:
         print("archived previous ->", archived)
 
-    queue = [v for v in videos
-             if (v.get("mid_str") or v.get("mid")) not in done]
+    queue = (list(videos) if args.force else
+             [v for v in videos
+              if (v.get("mid_str") or v.get("mid")) not in done
+              or _needs_refresh(str(v.get("mid_str") or v.get("mid")))])
     if args.limit:
         queue = queue[:args.limit]
     print("total videos=%d, already done=%d, to crawl=%d%s" % (
@@ -309,13 +432,37 @@ def main():
         if not oid or not mid:
             continue
         try:
-            rec = crawl_one(a, oid, mid, args.delay)
+            # post-publish-7d daily data is FROZEN for videos older than 7 days,
+            # so skip re-fetching it once captured (saves ~2 API calls per old video).
+            age_days = _age_days(v.get("create_time"))
+            skip_pubweek = (age_days is not None and age_days > 7
+                            and (prev_videos.get(mid) or {}).get("publish_week_daily"))
+            old = prev_videos.get(mid)
+            has_core = old and old.get("total_traffic") is not None
+            if args.force or not has_core:
+                # full crawl (first time, or missing core lifetime data)
+                rec = crawl_one(a, oid, mid, args.delay, vitem=v, skip_pubweek=bool(skip_pubweek))
+                if skip_pubweek:
+                    # keep the previously captured frozen series
+                    rec["publish_week_daily"] = old["publish_week_daily"]
+                if not args.force:
+                    rec = merge_static(rec, old or {})
+            else:
+                # light refresh: keep existing core data, only fill the new fields
+                # (publish_week_daily + interactions) so a normal run is fast.
+                rec = old
+                if not skip_pubweek:
+                    rec["publish_week_daily"] = fetch_publish_week(a, oid, mid, args.delay)
+                rec["interactions"] = interactions_from(v)
             store["videos"][mid] = rec
             ok += 1
-            t7 = (rec.get("traffic_7d") or {})
-            print("[%d/%d] %s play7d=%s len=%ss (%s) clarity=%s" % (
-                i, len(queue), mid, t7.get("play_count"),
-                t7.get("play_totallength_sec"), t7.get("play_totallength_unit"),
+            tt = (rec.get("total_traffic") or {})
+            pw = rec.get("publish_week_daily") or {}
+            pw_play = sum(int(d["number"]) for d in pw.get("play_count", [])
+                          if isinstance(d.get("number"), (int, float)))
+            print("[%d/%d] %s total_play=%s len=%ss (%s) pub7_play=%d clarity=%s" % (
+                i, len(queue), mid, tt.get("play_count"),
+                tt.get("play_totallength_sec"), tt.get("play_totallength_unit"), pw_play,
                 (rec.get("clarity_score") or {}).get("score")))
         except Exception as ex:
             print("  ERR %s: %s" % (mid, ex))
@@ -332,7 +479,8 @@ def _flush(store):
     store["meta"] = {
         "uid": AUTHOR_UID,
         "source": ("me.weibo.com/api/proxy/native/datavidnew(tab=traffic|diagnosis)"
-                   " + datavid_item(dt_onevid_score|playratio|scene|portrait)"),
+                   " + datavid_item(dt_onevid_score|playratio|scene|portrait)"
+                   " + datanew_selectdata(period=7) for post-publish 7-day daily"),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "total_videos": len(store["videos"]),
         "note": ("per-video statistics; JSON keys follow original API field names; "
