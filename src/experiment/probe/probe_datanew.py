@@ -12,6 +12,7 @@ import sys, json
 sys.path.insert(0, "src/experiment")
 sys.path.insert(0, "src")
 from auth import Auth
+from constants import BROWSER_USER_AGENT
 
 a = Auth()
 a.uid = AUTHOR_UID
@@ -20,7 +21,7 @@ H = "https://me.weibo.com/api/proxy/native/"
 
 def grab(path, params):
     r = a.session.get(H + path, params=params,
-                      headers={"User-Agent": "Mozilla/5.0",
+                      headers={"User-Agent": BROWSER_USER_AGENT,
                                 "Referer": "https://me.weibo.com/"}, timeout=20000)
     s = r.text
     out = {}

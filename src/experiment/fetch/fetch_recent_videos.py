@@ -3,7 +3,7 @@ creator-center `getVideoList` endpoint, recording every metadata field returned,
 and persist to a data file that can be re-run to UPDATE (new videos appended,
 existing videos' metadata refreshed).
 
-Output: src/data/video/author_videos.json
+Output: src/data/creator_center/creator_center_author_videos.json
   {
     "meta": { uid, source, updated_at, total, last_run_new,
               last_run_updated, prev_updated_at, first_created, last_created },
@@ -47,20 +47,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from auth import Auth
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+from constants import BROWSER_USER_AGENT as UA
 ENDPOINT = "https://weibo.com/ajax/multimedia/getVideoList"
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-OUT = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
+OUT = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
 PAGE_DELAY = 1.0
 END_CURSORS = {"", "0", "-1"}
 
 
-def beijing(ts_ms):
-    if not ts_ms:
-        return None
-    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc) + timedelta(hours=8)
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
+from datetime_util import utc8_from_ms  # noqa: E402  (server-ms -> Beijing display)
 
 
 def fetch_page(a, cursor, tries=4):
@@ -148,8 +143,8 @@ def main():
             "last_run_new": new_count,
             "last_run_updated": updated_count,
             "prev_updated_at": prev_meta.get("updated_at"),
-            "first_created_beijing": beijing(first_ct),
-            "last_created_beijing": beijing(last_ct),
+            "first_created_utc8": utc8_from_ms(first_ct),
+            "last_created_utc8": utc8_from_ms(last_ct),
         },
         "videos": items,
     }
@@ -166,7 +161,7 @@ def main():
     print("new this run        :", new_count)
     print("updated this run    :", updated_count)
     print("date range (BJ)     : %s  ->  %s" %
-          (beijing(first_ct), beijing(last_ct)))
+          (utc8_from_ms(first_ct), utc8_from_ms(last_ct)))
     if overload is not None:
         print("api video_overload_count:", overload)
     print("saved ->", OUT)

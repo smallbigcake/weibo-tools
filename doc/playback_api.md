@@ -243,7 +243,7 @@ Key facts:
   channel (`--channels quad`) — the highest-coverage attempt to credit PLAY DURATION.
   Still UNVERIFIED (live run blocked 2026-09-22 by a spent viewer SSO credential).
 
-Implemented as the multi-channel replay in `quick_watch_recent.py`
+Implemented as the multi-channel replay in `beacon_engine.py`
 (`--channels single|dual|triple|quad`; default `dual`). `quad` = report.json +
 h5playlog + playstatistics + `read`, all returning 200 in dry-run. play_duration
 credit is LAGGED to the next day — verify via `read_backend_aggregate.py`

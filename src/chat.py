@@ -31,9 +31,7 @@ CHAT_SUB_TYPE_CLEAR_UNREAD = 332
 CHAT_INFO_SUB_TYPE_RED_ENVELOP = 101
 CHAT_INFO_MEDIA_TYPE_LINK = 13
 
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-
-# Local config (may contain real UID / proxy -> NOT committed). It lives at the
+from constants import BROWSER_USER_AGENT as USER_AGENT
 # project ROOT under config/ (gitignored), separate from the in-package
 # resources under src/. Fall back to the legacy src/config/ location so existing
 # setups still work.

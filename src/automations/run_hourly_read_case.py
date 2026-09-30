@@ -30,6 +30,7 @@ sys.path.insert(0, SRC)
 os.chdir(SRC)
 
 from auth import Auth  # noqa: E402
+from datetime_util import record_now  # noqa: E402
 
 
 def _load_experiment_config():
@@ -52,8 +53,7 @@ DETAIL = 'https://weibo.com/%s/%s' % (AUTHOR_UID, CASE_MB)
 VIEWER_COOKIE_FILE = os.path.join(SRC, 'cookies.%s.weibo' % VIEWER_UID)
 # Observation output is a log, so it lives with the other runtime logs.
 LOG = os.path.join(SRC, 'log', 'automation', 'hourly_read_case.jsonl')
-UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-      '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+from constants import BROWSER_USER_AGENT as UA
 H_JSON = {'User-Agent': UA, 'Accept': 'application/json, text/plain, */*',
           'Referer': 'https://weibo.com/', 'x-requested-with': 'XMLHttpRequest'}
 
@@ -117,7 +117,7 @@ def main():
     res = visit(viewer_session, DETAIL)
     time.sleep(3)
     after = measure(author.session)
-    rec = {'iso': time.strftime('%Y-%m-%d %H:%M:%S'), 'cycle': 'auto',
+    rec = {'iso': record_now(), 'cycle': 'auto',
            'before_reads': before, 'after_reads': after,
            'delta': (after - before) if (before is not None and after is not None) else None,
            'visit_result': res}

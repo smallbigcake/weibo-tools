@@ -59,6 +59,7 @@ SRC = os.path.abspath(os.path.join(HERE, '..'))
 sys.path.insert(0, SRC)
 os.chdir(SRC)
 
+from datetime_util import record_now
 from auth import Auth
 from weibo_tool import fof
 from weibo_tool.commands.profile_visit import run_visit
@@ -210,7 +211,7 @@ def main():
 
     elapsed = int(time.time() - start)
     rec = {
-        'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'iso': record_now(),
         'cycle': 'auto',
         'user': AUTHOR_LABEL,
         'uid': owner_uid,

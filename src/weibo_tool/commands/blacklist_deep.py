@@ -38,6 +38,7 @@ if _SRC_DIR not in sys.path:
 
 # Shared logging convention (config/logging.ini); idempotent.
 from logutil import setup as _setup_logging
+from datetime_util import beijing_display  # noqa: E402
 _setup_logging()
 
 # Config-driven interpretation of Weibo's verified* fields (single source of truth).
@@ -616,7 +617,7 @@ def write_summary_md(summary, path, subject=None, viewer=None, generated_at=None
     lines.append('')
     lines.append('- %s `%s`' % (subject_label, subject or '?'))
     lines.append('- Viewer (profile reader): `%s`' % (viewer or '?'))
-    lines.append('- Generated: %s' % (generated_at or datetime.datetime.now().isoformat(timespec='seconds')))
+    lines.append('- Generated: %s' % (beijing_display(generated_at) if generated_at else beijing_display()))
     lines.append('- %s: **%d**' % (total_label, n))
     lines.append('')
     lines.append('## Coverage')

@@ -19,8 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from auth import Auth
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+from constants import BROWSER_USER_AGENT as UA
 BASE = "https://me.weibo.com/api/proxy/native"
 
 
@@ -52,7 +51,7 @@ def main():
     a.load()
 
     lst = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                                      "data", "video", "author_videos.json"), encoding="utf-8"))["videos"]
+                                      "data", "creator_center", "creator_center_author_videos.json"), encoding="utf-8"))["videos"]
     # pick the video with the largest play_count
     v = max(lst, key=lambda x: (x.get("play_count") or 0))
     oid = v.get("oid")

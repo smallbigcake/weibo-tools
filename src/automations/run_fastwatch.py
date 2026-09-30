@@ -4,7 +4,7 @@ Invoked once per day by the `daily-fastwatch-1s` CodeBuddy automation (or
 manually). It reuses the real experiment script so every behavior stays
 identical to running it by hand:
 
-  src/experiment/fetch/quick_watch_recent.py   (the FastWatch method; pace via --delay)
+  src/experiment/fetch/beacon_engine.py   (the FastWatch method; pace via --delay)
 
 That script POSTs the FULL playback-heartbeat sequence for each of author's
 videos published in the last `--days` days -- start, a progress heartbeat every
@@ -54,18 +54,19 @@ os.chdir(SRC)
 
 import logging
 from logutil import setup as _setup_logging
+from datetime_util import record_now
 _setup_logging()  # shared logging: console -> stdout, rotating file log/weibo.log
 log = logging.getLogger('run_fastwatch')
 
 AUTOMATION_LOG_DIR = os.path.join(SRC, 'log', 'automation')
 os.makedirs(AUTOMATION_LOG_DIR, exist_ok=True)
 LOG = os.path.join(AUTOMATION_LOG_DIR, 'fastwatch_log.jsonl')
-EXP_MODULE = os.path.join(SRC, 'experiment', 'fetch', 'quick_watch_recent.py')
+EXP_MODULE = os.path.join(SRC, 'experiment', 'fetch', 'beacon_engine.py')
 
 
 def _load_experiment():
     """Import the experiment module by file path (avoids package layout issues)."""
-    spec = importlib.util.spec_from_file_location('quick_watch_recent', EXP_MODULE)
+    spec = importlib.util.spec_from_file_location('beacon_engine', EXP_MODULE)
     qw = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(qw)
     return qw
@@ -127,7 +128,7 @@ def main():
                     help='repeat the beacon sequence this many times per video')
     ap.add_argument('--channels', choices=['single', 'dual', 'triple', 'quad'],
                     default='dual',
-                    help='playback beacon channels forwarded to quick_watch_recent.py '
+                    help='playback beacon channels forwarded to beacon_engine.py '
                          '(default dual; triple adds playstatistics once per video start; '
                          'quad adds PC_real_read every heartbeat)')
     ap.add_argument('--dry-run', action='store_true',
@@ -135,7 +136,7 @@ def main():
     args = ap.parse_args()
 
     # Forward to the experiment via its own argv (its main() parses argparse).
-    argv = ['quick_watch_recent.py',
+    argv = ['beacon_engine.py',
             '--days', str(args.days),
             '--rounds', str(args.rounds),
             '--delay', str(args.delay),
@@ -163,7 +164,7 @@ def main():
                % VIEWER_LABEL)
         log.error(msg)
         rec = {
-            'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'iso': record_now(),
             'cycle': 'auto',
             'args': run_args,
             'elapsed_s': 0,
@@ -187,7 +188,7 @@ def main():
     elapsed = int(time.time() - start)
 
     rec = {
-        'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'iso': record_now(),
         'cycle': 'auto',
         'args': run_args,
         'list_source': summary.get('list_source'),

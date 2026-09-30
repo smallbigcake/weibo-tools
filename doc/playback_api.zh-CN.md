@@ -235,7 +235,7 @@
   因此把 `read`（`PC_real_read`）作为**第 4 通道**（`--channels quad`）加入，是让播放时长
   入账的最高覆盖率尝试。仍未验证（2026-09-22 实际运行因 viewer SSO 凭证失效被阻断）。
 
-已在 `quick_watch_recent.py` 中实现为**多通道**重放
+已在 `beacon_engine.py` 中实现为**多通道**重放
 （`--channels single|dual|triple|quad`，默认 `dual`）。`quad` = report.json +
 h5playlog + playstatistics + `read`，dry-run 中均返回 200。播放时长的入账**滞后到次日**——
 次日用 `read_backend_aggregate.py` 的 `play_dura_count`（账号级昨日）验证。

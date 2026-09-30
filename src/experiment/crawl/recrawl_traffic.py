@@ -1,6 +1,7 @@
-"""Targeted re-crawl: refresh ONLY the fields that suffered from the unit /
-staleness bug -- `weibo_info` and `traffic_7d` (per-video 7-day play count +
-watch time) -- and update them IN PLACE in src/data/video/author_video_stats.json, keeping all
+"""Targeted re-crawl: refresh ONLY the traffic-related / interaction fields in
+PLACE in src/data/creator_center/creator_center_author_video_stats.json -- `weibo_info`, `total_traffic`
+(lifetime play count + watch time), `publish_week_daily` (post-publish 7-day
+daily), and `interactions` (from author_videos.json.statistics) -- keeping all
 other fields (diagnosis, clarity_score, play_ratio, traffic_source, portrait)
 untouched.
 
@@ -21,7 +22,8 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from crawl_video_stats import (parse_traffic, parse_weibo_info, AUTHOR_UID, BASE, UA,
+from crawl_video_stats import (parse_traffic, parse_weibo_info, fetch_publish_week,
+                               interactions_from, AUTHOR_UID, BASE, UA,
                                VIDEOS_JSON, OUT_JSON)
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -59,6 +61,7 @@ def main():
     args = ap.parse_args()
 
     videos = json.load(open(VIDEOS_JSON, encoding="utf-8"))["videos"]
+    vmap = {str(v.get("mid_str") or v.get("mid")): v for v in videos}
     if os.path.exists(OUT_JSON):
         store = json.load(open(OUT_JSON, encoding="utf-8"))
     else:
@@ -80,7 +83,7 @@ def main():
     queue = list(videos)
     if args.limit:
         queue = queue[:args.limit]
-    print("refreshing weibo_info + traffic_7d for %d videos" % len(queue))
+    print("refreshing weibo_info + total_traffic + publish_week_daily + interactions for %d videos" % len(queue))
 
     ok = 0
     for i, v in enumerate(queue, 1):
@@ -95,17 +98,25 @@ def main():
             rec = store["videos"].get(mid, {})
             wi = parse_weibo_info(default)
             t7 = parse_traffic(traffic)
+            pubweek = fetch_publish_week(a, oid, mid, args.delay)
+            interactions = interactions_from(vmap.get(mid))
             if wi is not None:
                 rec["weibo_info"] = wi
             if t7 is not None:
-                rec["traffic_7d"] = t7
+                rec["total_traffic"] = t7
+            if pubweek is not None:
+                rec["publish_week_daily"] = pubweek
+            if interactions is not None:
+                rec["interactions"] = interactions
             store["videos"][mid] = rec
             ok += 1
-            print("[%d/%d] %s play7d=%s len=%ss (%s)" % (
+            print("[%d/%d] %s total_play=%s len=%ss (%s) pub7_play=%s" % (
                 i, len(queue), mid,
                 (t7 or {}).get("play_count"),
                 (t7 or {}).get("play_totallength_sec"),
-                (t7 or {}).get("play_totallength_unit")))
+                (t7 or {}).get("play_totallength_unit"),
+                sum(int(d["number"]) for d in (pubweek or {}).get("play_count", [])
+                    if isinstance(d.get("number"), (int, float)))))
         except Exception as ex:
             print("  ERR %s: %s" % (mid, ex))
         if i % 10 == 0:
@@ -119,8 +130,8 @@ def main():
 def _flush(store):
     store["meta"] = {
         "uid": AUTHOR_UID,
-        "source": ("targeted refresh of weibo_info + traffic_7d "
-                   "(reuses crawl_video_stats.normalization)"),
+        "source": ("targeted refresh of weibo_info + total_traffic + publish_week_daily "
+                   "+ interactions (reuses crawl_video_stats.normalization)"),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "total_videos": len(store["videos"]),
         "note": ("per-video statistics; play_totallength normalized to seconds "

@@ -31,10 +31,7 @@ sys.path.insert(0, os.path.join(SRC_DIR, 'experiment', 'fetch'))
 from auth import Auth
 
 BASE = "https://me.weibo.com/api/proxy/native/datavidnew"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-
-
+from constants import BROWSER_USER_AGENT as UA
 def fetch(a, mid, oid, tab):
     params = {"video_oid": oid, "mid": mid, "blogger_uid": AUTHOR_UID, "tab": tab}
     r = a.session.get(BASE, params=params,

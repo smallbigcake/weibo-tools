@@ -15,6 +15,7 @@ ROOT = os.path.dirname(SRC)                             # project root
 sys.path.insert(0, SRC)
 os.chdir(SRC)
 from auth import Auth, USER_AGENT
+from constants import MOBILE_USER_AGENT
 
 
 def _load_experiment_config():
@@ -36,9 +37,7 @@ H_JSON = {'User-Agent': USER_AGENT, 'Accept': 'application/json, text/plain, */*
           'Referer': 'https://weibo.com/', 'x-requested-with': 'XMLHttpRequest'}
 H_XSRF = dict(H_JSON); H_XSRF['Content-Type'] = 'application/x-www-form-urlencoded'
 H_MOBILE = {
-    'User-Agent': ('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) '
-                   'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-                   'Mobile/15E148 MicroMessenger/8.0 wv/') ,
+    'User-Agent': MOBILE_USER_AGENT,
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Referer': 'https://m.weibo.cn/',
 }

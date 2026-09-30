@@ -27,6 +27,7 @@ uninformative body, and we should not silently guess at the cause.
 """
 import logging
 import os
+import time
 
 _CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 _INI = os.path.join(_CONFIG_DIR, 'config', 'logging.ini')
@@ -52,6 +53,7 @@ def setup():
         logging.config.fileConfig(_INI, disable_existing_loggers=False)
     finally:
         os.chdir(prev_cwd)
+    _force_utc_formatters()
     _setup_done = True
 
 
@@ -106,3 +108,62 @@ def dump_response(resp, label='', level=logging.WARNING):
         lines.append('    %s: %s' % (k, v))
     lines.append('  [response %s' % _summarize_body(resp))
     log.log(level, '\n'.join(lines))
+
+
+def share_handler(logger, handler):
+    """Point `logger` at an orchestrator-owned `handler` so several modules'
+    logs merge into ONE file.
+
+    Drops any FileHandler `logger` already owns (e.g. its own daily file) so a
+    batch run writes a single file instead of one per module. Used by
+    simulated_watch to merge the beacon_engine + dash_streamer logs into its
+    per-batch log file.
+    """
+    for h in list(logger.handlers):
+        if isinstance(h, logging.FileHandler):
+            try:
+                h.close()
+            except Exception:
+                pass
+            logger.removeHandler(h)
+    logger.addHandler(handler)
+
+
+# ---------------------------------------------------------------------------
+# Shared log-line format + UTC timestamp handling (single source of truth)
+# ---------------------------------------------------------------------------
+# Every module used to inline its own `logging.Formatter('%(asctime)s ...')`,
+# which made the leading timestamp LOCAL time (Beijing on this machine) and
+# forced a dozen edits whenever the format or timezone had to change. Centralize
+# both here so the format string and the UTC switch live in ONE place.
+LOG_FMT = '%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s'
+LOG_FMT_MILLIS = '[%(asctime)s.%(msecs)03d][%(levelname)s](%(filename)s#%(lineno)d): %(message)s'
+
+
+def utc_formatter(fmt=LOG_FMT, datefmt=None):
+    """Return a logging.Formatter whose `%(asctime)s` timestamp is UTC.
+
+    Python's logging uses the LOCAL timezone for `%(asctime)s` by default
+    (Beijing time on this machine). Pinning `converter = time.gmtime` makes
+    every log line's leading timestamp UTC, consistently, everywhere.
+    """
+    f = logging.Formatter(fmt, datefmt=datefmt)
+    f.converter = time.gmtime
+    return f
+
+
+def _force_utc_formatters():
+    """Make every already-configured formatter emit UTC timestamps.
+
+    `logging.config.fileConfig` builds formatters with the default local-time
+    converter, which we cannot override from `config/logging.ini`, so fix it
+    here in one place. This covers the shared `weibo.log` + console handlers
+    configured by `setup()`; modules that add their own handlers should use
+    `utc_formatter()` directly.
+    """
+    for logger in [logging.root] + list(logging.Logger.manager.loggerDict.values()):
+        if not isinstance(logger, logging.Logger):
+            continue
+        for h in logger.handlers:
+            if getattr(h, 'formatter', None) is not None:
+                h.formatter.converter = time.gmtime
