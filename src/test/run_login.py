@@ -11,16 +11,16 @@ import argparse
 import os
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Ensure src/ (parent of this test dir) is importable.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 # Configure logging to also write to test/log/.
 import logging
-from logutil import setup as _setup_logging
+from logutil import setup as _setup_logging, utc_formatter, LOG_FMT_MILLIS
 _setup_logging()
-Timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+Timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
 
 def setup_file_log(mode: str):
     log_dir = os.path.join(os.path.dirname(__file__), 'log')
@@ -28,10 +28,8 @@ def setup_file_log(mode: str):
     log_path = os.path.join(log_dir, f'{Timestamp}_{mode}.log')
     fh = logging.FileHandler(log_path, encoding='utf-8')
     fh.setLevel(logging.DEBUG)
-    fh.setFormatter(logging.Formatter(
-        '[%(asctime)s.%(msecs)03d][%(levelname)s](%(filename)s#%(lineno)d): %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-    ))
+    fh.setFormatter(utc_formatter(fmt=LOG_FMT_MILLIS,
+                                  datefmt='%Y-%m-%d %H:%M:%S'))
     logging.getLogger().addHandler(fh)
     logging.info(f'Test log: {log_path}')
     return log_path

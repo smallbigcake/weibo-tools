@@ -1,7 +1,7 @@
 """Crawl per-video statistics for ALL author videos from the creator-center
 (me.weibo.com) single-video detail endpoints, and save to a data file.
 
-For each video (oid + mid from src/data/video/author_videos.json) we call the same
+For each video (oid + mid from src/data/creator_center/creator_center_author_videos.json) we call the same
 endpoints the single-video detail page fires, all carrying
 video_oid + mid + blogger_uid:
 
@@ -17,7 +17,7 @@ video_oid + mid + blogger_uid:
 All JSON keys are English and follow the ORIGINAL API field names. Chinese
 appears only as values (e.g. label "关注", text "作品画质清晰度过低").
 
-Output: src/data/video/author_video_stats.json
+Output: src/data/creator_center/creator_center_author_video_stats.json
   { meta:{...}, videos:{ <mid>: {
         mid, video_oid, weibo_info,
         total_traffic:      {period, play_count, play_totallength,
@@ -40,7 +40,11 @@ can be re-run to continue after an interruption. Pass --force to re-crawl every
 video (e.g. after a parser/normalization fix).
 
 Usage:
-  venvs/test-env/Scripts/python.exe src/experiment/crawl/crawl_video_stats.py [--limit N] [--delay 0.8]
+  venvs/test-env/Scripts/python.exe src/experiment/crawl/crawl_video_stats.py [--limit N] [--delay 0.8] [--force] [--diff]
+  --diff : also run diff_video_stats.py (Phase 3) right after the crawl, in the
+           same process, so the daily report is produced automatically (no manual
+           second step). Baseline = latest snapshot STRICTLY older than the new
+           data's date (i.e. the previous day), per diff_video_stats.py logic.
 """
 import os as _os
 import re
@@ -67,8 +71,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VIDEOS_JSON = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
-OUT_JSON = os.path.join(SRC_DIR, "data", "video", "author_video_stats.json")
+VIDEOS_JSON = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
+OUT_JSON = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_video_stats.json")
 BASE = "https://me.weibo.com/api/proxy/native"
 
 
@@ -377,6 +381,10 @@ def main():
     ap.add_argument("--force", action="store_true",
                     help="re-crawl ALL videos, ignoring already-crawled mids "
                          "(use after a parser/normalization fix)")
+    ap.add_argument("--diff", action="store_true",
+                    help="after crawling, automatically run diff_video_stats.py "
+                         "(Phase 3) in the SAME process, comparing the new "
+                         "snapshot against the previous-day archive")
     args = ap.parse_args()
 
     videos = json.load(open(VIDEOS_JSON, encoding="utf-8"))["videos"]
@@ -474,6 +482,9 @@ def main():
     _flush(store)
     print("done. crawled this run=%d, total stored=%d" % (ok, len(store["videos"])))
 
+    if args.diff:
+        _run_diff()
+
 
 def _flush(store):
     store["meta"] = {
@@ -488,6 +499,25 @@ def _flush(store):
     }
     with open(OUT_JSON, "w", encoding="utf-8") as f:
         json.dump(store, f, ensure_ascii=False, indent=2)
+
+
+def _run_diff():
+    """Phase 3: diff the just-written snapshot against the previous-day archive.
+
+    Imported lazily so this module has no hard dependency on analyze/ at import
+    time, and so the diff runs in the SAME process right after the crawl (no
+    separate manual step needed)."""
+    print("\n=== Phase 3: diff new snapshot vs previous-day archive ===")
+    analyze_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "analyze")
+    if analyze_dir not in sys.path:
+        sys.path.insert(0, analyze_dir)
+    try:
+        from diff_video_stats import main as diff_main
+    except Exception as ex:
+        print("  could not import diff_video_stats: %s" % ex)
+        return
+    diff_main()
 
 
 if __name__ == "__main__":

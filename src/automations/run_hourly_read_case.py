@@ -30,6 +30,7 @@ sys.path.insert(0, SRC)
 os.chdir(SRC)
 
 from auth import Auth  # noqa: E402
+from datetime_util import record_now  # noqa: E402
 
 
 def _load_experiment_config():
@@ -116,7 +117,7 @@ def main():
     res = visit(viewer_session, DETAIL)
     time.sleep(3)
     after = measure(author.session)
-    rec = {'iso': time.strftime('%Y-%m-%d %H:%M:%S'), 'cycle': 'auto',
+    rec = {'iso': record_now(), 'cycle': 'auto',
            'before_reads': before, 'after_reads': after,
            'delta': (after - before) if (before is not None and after is not None) else None,
            'visit_result': res}

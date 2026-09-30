@@ -6,8 +6,9 @@ current file into <live_dir>/archive/<stem>_<UTC-stamp>.json, using the
 file's own meta.updated_at as the timestamp so the archive name reflects
 when that snapshot was actually taken (not when it was archived).
 
-Stamp format (human-readable, fixed-width, lexicographically sortable,
-Windows-safe -- no colons): 2026-09-27_06-25-37  (UTC, date_time).
+Stamp format (see filestamp.py -- human-readable, fixed-width,
+lexicographically sortable, Windows-safe -- no colons):
+2026-09-27_06-25-37  (UTC, date_time).
 
 The archive is a plain copy (shutil.copy2) and is skipped if an archive
 with the same name already exists, so re-running never duplicates history.
@@ -19,7 +20,14 @@ Usage:
 import json
 import os
 import shutil
-from datetime import datetime, timezone
+import sys
+from datetime import datetime
+
+_SRC_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _SRC_ROOT not in sys.path:
+    sys.path.insert(0, _SRC_ROOT)
+
+from filestamp import TZ, batch_stamp, stamp_from_iso  # noqa: E402
 
 
 def _stamp_from_meta(live_path):
@@ -31,14 +39,13 @@ def _stamp_from_meta(live_path):
         ts = meta.get("updated_at")
         if ts:
             # meta.updated_at is ISO like 2026-09-13T02:57:52.432833+00:00
-            dt = datetime.fromisoformat(ts)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+            stamp = stamp_from_iso(ts)
+            if stamp:
+                return stamp
     except Exception:
         pass
     mtime = os.path.getmtime(live_path)
-    return datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+    return batch_stamp(datetime.fromtimestamp(mtime, tz=TZ))
 
 
 def archive_existing(live_path):

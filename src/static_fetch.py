@@ -40,6 +40,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime_util import record_now
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse, unquote
@@ -477,7 +478,7 @@ class Fetcher(object):
             assets.append(entry)
         payload = {
             'domain': self.domain,
-            'generated_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+            'generated_at': record_now(),
             'asset_count': len(assets),
             'assets': assets,
         }

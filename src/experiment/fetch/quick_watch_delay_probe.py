@@ -274,7 +274,7 @@ def send_sequence(session, mid, oid, duration, seq, delay, contribution=0):
 
 def snapshot_aggregates(tag):
     """OPTIONAL, LAGGED: creator-center aggregates (yesterday/7d/30d)."""
-    import read_backend_aggregate as _ra
+    import read_video_aggregates as _ra
     a = Auth()
     a.uid = AUTHOR_UID
     a.load()

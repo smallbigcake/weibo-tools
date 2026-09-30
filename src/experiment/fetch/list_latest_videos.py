@@ -23,15 +23,12 @@ VIEWER_UID = _CFG.get('viewer_uid')
 import json
 import os
 import sys
-from datetime import datetime, timedelta
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
-def beijing(ts_ms):
-    return (datetime.utcfromtimestamp(ts_ms / 1000) + timedelta(hours=8))
+from datetime_util import utc8_from_ms  # noqa: E402  (server-ms -> Beijing display)
 
 
 def main():
@@ -58,7 +55,7 @@ def main():
             ct = it.get("create_time")
             out.append({
                 "mid": it.get("mid_str") or it.get("mid"),
-                "time_beijing": beijing(ct).strftime("%Y-%m-%d %H:%M:%S") if ct else None,
+                "time_utc8": utc8_from_ms(ct),
                 "title": title,
                 "duration_s": it.get("duration"),
                 "play_count": (it.get("statistics") or {}).get("play_count"),
@@ -71,7 +68,7 @@ def main():
 
     print("latest %d videos (newest first):\n" % len(out))
     for i, v in enumerate(out, 1):
-        print("%2d. [%s]  %s" % (i, v["time_beijing"], v["title"]))
+        print("%2d. [%s]  %s" % (i, v["time_utc8"], v["title"]))
 
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "latest_%d_videos.json" % len(out))

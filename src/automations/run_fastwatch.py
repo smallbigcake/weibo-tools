@@ -54,6 +54,7 @@ os.chdir(SRC)
 
 import logging
 from logutil import setup as _setup_logging
+from datetime_util import record_now
 _setup_logging()  # shared logging: console -> stdout, rotating file log/weibo.log
 log = logging.getLogger('run_fastwatch')
 
@@ -163,7 +164,7 @@ def main():
                % VIEWER_LABEL)
         log.error(msg)
         rec = {
-            'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'iso': record_now(),
             'cycle': 'auto',
             'args': run_args,
             'elapsed_s': 0,
@@ -187,7 +188,7 @@ def main():
     elapsed = int(time.time() - start)
 
     rec = {
-        'iso': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'iso': record_now(),
         'cycle': 'auto',
         'args': run_args,
         'list_source': summary.get('list_source'),

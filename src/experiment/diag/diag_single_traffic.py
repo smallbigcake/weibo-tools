@@ -51,7 +51,7 @@ def main():
     a.load()
 
     lst = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                                      "data", "video", "author_videos.json"), encoding="utf-8"))["videos"]
+                                      "data", "creator_center", "creator_center_author_videos.json"), encoding="utf-8"))["videos"]
     # pick the video with the largest play_count
     v = max(lst, key=lambda x: (x.get("play_count") or 0))
     oid = v.get("oid")

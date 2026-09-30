@@ -68,14 +68,16 @@ _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, _src_root)
 
 from auth import Auth
-from logutil import setup as _setup_logging, share_handler
+from logutil import setup as _setup_logging, share_handler, utc_formatter
+from filestamp import batch_stamp
+from datetime_util import utc8_from_ms
 _setup_logging()
 # Reuse the canonical beacon implementations from beacon_engine (single source of truth).
 from beacon_engine import (  # noqa: E402
     _viewer_session, _post_report_step, _post_h5playlog_step,
     _post_playstatistics_step, _post_read_step, _post_action_step,
     _post_rum_step, _rum_transaction,
-    build_sequence, beijing, get_video_list, UA, req_host_value,
+    build_sequence, get_video_list, UA, req_host_value,
     _http_ok, log as _beacon_log,
 )
 # DASH url selection + byte-fetch live in dash_streamer.py.
@@ -99,8 +101,8 @@ def setup_batch_log():
     separate simulated_watch + beacon_engine pair). Returns the FileHandler so
     callers (e.g. simulated_watch_targeted) can also attach it to their logger.
     """
-    BATCH = datetime.now().strftime('%Y%m%d_%H%M%S')
-    _fmt = logging.Formatter('%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s')
+    BATCH = batch_stamp()
+    _fmt = utc_formatter()
     _dir = os.path.join(SRC_DIR, 'log', 'watch')
     _fh = logging.FileHandler(os.path.join(_dir, 'simulated_watch_%s.log' % BATCH), encoding='utf-8')
     _fh.setLevel(logging.DEBUG)
@@ -246,7 +248,7 @@ def watch_one(session, video, results, args):
     # Build one streamer per DASH url (video + audio interleaved per heartbeat).
     streamers = [DashStreamer(session, u, lbl, args.chunk, args.max_bytes)
                  for lbl, u in dash_urls]
-    play_time = beijing(int(time.time() * 1000))
+    play_time = utc8_from_ms(int(time.time() * 1000))
 
     # ONE stable session id per watch: the browser keeps `sid` (h5playlog) and
     # `rid` (PC_real_read) byte-identical across every heartbeat of a single
@@ -318,7 +320,7 @@ def watch_one(session, video, results, args):
 # Optional LAGGED creator-center aggregate snapshot (pre/post)
 # --------------------------------------------------------------------------
 def snapshot_aggregates(tag):
-    import read_backend_aggregate as _ra
+    import read_video_aggregates as _ra
     a = Auth()
     a.uid = AUTHOR_UID
     a.load()
@@ -405,7 +407,7 @@ def main():
     log.info("window: %d videos (source=%s)", len(window), wsource)
     for i, v in enumerate(window, 1):
         log.info("  #%02d mid=%s dur=%.0fs created=%s title=%s", i, v["mid"],
-                 v.get("duration", 0), beijing(v.get("create_time")),
+                 v.get("duration", 0), utc8_from_ms(v.get("create_time")) or "?",
                  (v.get("title") or "")[:60])
 
     if not window:

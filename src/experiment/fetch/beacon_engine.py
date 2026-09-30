@@ -53,7 +53,7 @@ Selection (matches the old beacon_engine.py)
 --------------------------------------------------------------------------
     videos = author videos published in last `days` days (default 30), fetched
              LIVE at run time via the creator-center getVideoList (AUTHOR_UID
-             session); falls back to the static src/data/video/author_videos.json
+             session); falls back to the static src/data/creator_center/creator_center_author_videos.json
              snapshot if the author session is unavailable.
 
 Two run shapes, both honoring --channels:
@@ -103,7 +103,8 @@ _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, _src_root)
 
 from auth import Auth
-from logutil import setup as _setup_logging
+from logutil import setup as _setup_logging, utc_formatter
+from filestamp import batch_stamp, day_stamp, stamp_from_iso
 _setup_logging()  # idempotent; configures the shared weibo.log for other modules
 # Dedicated logger for THIS script: verbose per-request dumps go to a SEPARATE
 # DAILY file (src/log/watch/beacon_engine_YYYYMMDD.log) via a FileHandler. Isolation
@@ -112,8 +113,7 @@ _setup_logging()  # idempotent; configures the shared weibo.log for other module
 log = logging.getLogger('beacon_engine')
 log.setLevel(logging.DEBUG)
 log.propagate = False
-_qw_fmt = logging.Formatter(
-    '%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s')
+_qw_fmt = utc_formatter()
 _qw_dir = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     'log', 'watch')
@@ -124,7 +124,7 @@ _qw_suffix = None
 
 
 def _qw_log_path():
-    name = _qw_suffix or datetime.now().strftime('%Y%m%d')
+    name = _qw_suffix or day_stamp()
     return os.path.join(_qw_dir, 'beacon_engine_%s.log' % name)
 
 
@@ -157,7 +157,7 @@ def set_log_suffix(suffix):
 
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VIDEO_DATA = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
+VIDEO_DATA = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
 # All watch run logs live under src/data/watch/ (kept apart from the shared
 # author_videos.json DB and the diag/crawl outputs that also live in src/data).
 WATCH_DIR = os.path.join(SRC_DIR, "data", "watch")
@@ -222,7 +222,7 @@ def _log_http(r, label):
 
 
 def _daily_log_path():
-    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    day = day_stamp()
     return os.path.join(WATCH_DIR, "beacon_engine_log_%s.jsonl" % day)
 
 
@@ -235,14 +235,11 @@ def _archive_current_log():
             prev = json.load(f) or {}
         ts = prev.get("generated_at")
         if ts:
-            dt = datetime.fromisoformat(ts)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            stamp = dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            stamp = stamp_from_iso(ts)
     except Exception:
         pass
     if not stamp:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = batch_stamp()
     archive_dir = os.path.join(WATCH_DIR, "archive")
     os.makedirs(archive_dir, exist_ok=True)
     dst = os.path.join(archive_dir, "beacon_engine_log_%s.json" % stamp)
@@ -258,11 +255,7 @@ def method_label(delay):
     return "FastWatch-%.0fs" % delay
 
 
-def beijing(ts_ms):
-    if not ts_ms:
-        return "?"
-    dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc) + timedelta(hours=8)
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
+from datetime_util import utc8_from_ms  # noqa: E402  (server-ms -> Beijing display)
 
 
 # --------------------------------------------------------------------------
@@ -323,7 +316,7 @@ def fetch_video_list(session, pages=8, days=30):
 
 def load_window(days):
     """Normalized author videos published within the last `days` days (from the
-    static src/data/video/author_videos.json snapshot; fallback when live is unavailable)."""
+    static src/data/creator_center/creator_center_author_videos.json snapshot; fallback when live is unavailable)."""
     with open(VIDEO_DATA, encoding="utf-8") as f:
         data = json.load(f)
     cutoff = (time.time() - days * 86400) * 1000
@@ -361,7 +354,7 @@ def log_video_list(videos, days, source):
              days, source, len(videos))
     for i, v in enumerate(videos, 1):
         log.info("  #%02d  mid=%s  dur=%.0fs  created=%s  %s",
-                 i, v["mid"], v.get("duration", 0), beijing(v.get("create_time")),
+                 i, v["mid"], v.get("duration", 0), utc8_from_ms(v.get("create_time")) or "?",
                  (v.get("title") or "")[:40])
 
 
@@ -979,7 +972,7 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
 # Optional LAGGED creator-center aggregate snapshot
 # --------------------------------------------------------------------------
 def snapshot_aggregates(tag):
-    import read_backend_aggregate as _ra
+    import read_video_aggregates as _ra
     a = Auth()
     a.uid = AUTHOR_UID
     a.load()
@@ -1013,7 +1006,7 @@ def _http_ok(rec):
 
 
 def _write_audit(results, channels):
-    run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_stamp = batch_stamp()
     res_path = os.path.join(WATCH_DIR,
                             "beacon_engine_responses_%s.jsonl" % run_stamp)
     with open(res_path, "w", encoding="utf-8") as f:
@@ -1154,7 +1147,7 @@ def main():
     a_auth.load()
     sess = _viewer_session()
     results = []
-    play_time = beijing(int(time.time() * 1000))  # set once, mirrors the client
+    play_time = utc8_from_ms(int(time.time() * 1000))  # set once, mirrors the client
 
     t0 = time.time()
     ok = fail = 0

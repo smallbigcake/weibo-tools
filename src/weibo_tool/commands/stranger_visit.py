@@ -87,6 +87,7 @@ if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
 from logutil import setup as _setup_logging
+from datetime_util import record_now  # noqa: E402
 _setup_logging()
 
 from weibo_tool.http_engine import _request_json, _sleep, rate_limit_hits
@@ -501,7 +502,7 @@ def run(args, auth):
             known_banned[r['uid']] = {
                 'screen_name': r.get('screen_name', ''),
                 'reason': reason,
-                'at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'at': record_now(),
             }
             _save_banned(owner, known_banned)
             print('  banned uid %s (%s): %s'

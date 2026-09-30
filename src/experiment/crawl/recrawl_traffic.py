@@ -1,5 +1,5 @@
 """Targeted re-crawl: refresh ONLY the traffic-related / interaction fields in
-PLACE in src/data/video/author_video_stats.json -- `weibo_info`, `total_traffic`
+PLACE in src/data/creator_center/creator_center_author_video_stats.json -- `weibo_info`, `total_traffic`
 (lifetime play count + watch time), `publish_week_daily` (post-publish 7-day
 daily), and `interactions` (from author_videos.json.statistics) -- keeping all
 other fields (diagnosis, clarity_score, play_ratio, traffic_source, portrait)

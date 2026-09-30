@@ -2,7 +2,7 @@
 
 Unlike simulated_watch.py (which watches the author's whole 30-day window), this
 script watches ONLY a filtered subset of the author's catalog loaded from
-src/data/video/author_videos.json:
+src/data/creator_center/creator_center_author_videos.json:
 
   - videos whose `titles` carry NO `default:true` entry, AND
   - videos whose `playlists_ids` is empty.
@@ -18,7 +18,7 @@ and a dedicated log file.
 
 Usage:
   venvs/test-env/Scripts/python.exe src/experiment/fetch/simulated_watch_targeted.py \
-      [--json src/data/video/author_videos.json] [--days 30] \
+      [--json src/data/creator_center/creator_center_author_videos.json] [--days 30] \
       [--delay 30] [--rounds 1] [--cadence 30] [--quality dash_hd] \
       [--with-aggregate] [--smoke] [--dry-run]
 """
@@ -42,7 +42,8 @@ sys.path.insert(0, _SRC_ROOT)
 sys.path.insert(0, _os.path.join(_SRC_ROOT, 'experiment', 'fetch'))
 
 from auth import Auth  # noqa: E402  (validates the viewer session at import)
-from logutil import setup as _setup_logging, share_handler  # noqa: E402
+from logutil import setup as _setup_logging, share_handler, utc_formatter  # noqa: E402
+from filestamp import batch_stamp  # noqa: E402
 _setup_logging()
 
 # Reuse the watch engine + viewer session from simulated_watch.
@@ -52,7 +53,7 @@ from beacon_engine import log as _beacon_log  # noqa: E402
 from dash_streamer import log as _dash_log  # noqa: E402
 
 SRC_DIR = _SRC_ROOT
-DEFAULT_JSON = _os.path.join(SRC_DIR, "data", "video", "author_videos.json")
+DEFAULT_JSON = _os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
 
 
 def _title_has_default(titles):
@@ -144,11 +145,11 @@ def main():
 
     # Dedicated single log file for this targeted run; merge all three loggers.
     log = _sw_log
-    BATCH = time.strftime('%Y%m%d_%H%M%S')
+    BATCH = batch_stamp()
     _dir = _os.path.join(SRC_DIR, 'log', 'watch')
     _fh = logging.FileHandler(_os.path.join(_dir, 'simulated_watch_targeted_%s.log' % BATCH), encoding='utf-8')
     _fh.setLevel(logging.DEBUG)
-    _fh.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s](%(filename)s#%(lineno)d): %(message)s'))
+    _fh.setFormatter(utc_formatter())
     log.addHandler(_fh)
     share_handler(_beacon_log, _fh)
     share_handler(_dash_log, _fh)

@@ -525,6 +525,24 @@ class TestModuleImports(unittest.TestCase):
             'weibo_tool.commands.relations_sync',
             'weibo_tool.commands.stranger_visit',
             'weibo_tool.commands.top_followed',
+            # Time-refactor modules (datetime_util / logutil / data-time callers).
+            # These were changed to pull time formats from a single source, so a
+            # clean import guards against leftover/broken imports after edits.
+            'logutil',
+            'datetime_util',
+            'static_fetch',
+            'automations.run_profile_visit',
+            'automations.run_hourly_read_case',
+            'automations.run_fastwatch',
+            'experiment.fetch.beacon_engine',
+            'experiment.fetch.fetch_recent_videos',
+            'experiment.fetch.list_latest_videos',
+            'experiment.fetch.simulated_watch',
+            'experiment.fetch.read_videos_snapshot',
+            'experiment.fetch.read_video_aggregates',
+            'experiment.analyze.diff_video_stats',
+            # NOTE: experiment.capture.capture_video_playback is intentionally
+            # excluded -- it imports playwright, which is not a test dependency.
         ]
         for m in mods:
             importlib.import_module(m)  # raises on any import-time error

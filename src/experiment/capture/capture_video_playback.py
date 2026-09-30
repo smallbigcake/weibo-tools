@@ -32,9 +32,12 @@ from playwright.sync_api import sync_playwright
 VIDEO_URL = (f"https://weibo.com/u/{AUTHOR_UID}?tabtype=newVideo"
              f"&first_cursor=5149990424675345")
 _SRC = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # src/
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 COOKIE_PATH = os.path.join(_SRC, "cookies.%s.weibo" % VIEWER_UID)
 OUT_PATH = os.path.join(_SRC, "tmp", "capture", "video_playback_capture.json")
 from constants import BROWSER_USER_AGENT as USER_AGENT
+from datetime_util import record_now
 PLAY_SECONDS = 25  # how long to keep the page open after triggering playback
 
 
@@ -212,7 +215,7 @@ def main():
         "video_url": VIDEO_URL,
         "final_url": final_url,
         "viewer_uid": VIEWER_UID,
-        "captured_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "captured_at": record_now(),
         "request_count": len(records),
         "requests": records,
     }

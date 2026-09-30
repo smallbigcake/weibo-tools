@@ -3,11 +3,11 @@ report that lists ONLY the videos whose tracked metrics changed (plus newly
 appeared / disappeared videos). Unchanged videos are omitted.
 
 Inputs:
-  current : src/data/video/author_video_stats.json            (this run)
-  previous: src/data/video/archive/author_video_stats_*.json  (most recent = prior run)
+  current : src/data/creator_center/creator_center_author_video_stats.json            (this run)
+  previous: src/data/creator_center/archive/creator_center_author_video_stats_*.json  (most recent = prior run)
 
 Output:
-  src/data/video/author_video_stats_diff_<data-datetime>.md   (# current data's ts, e.g. 2026-09-27_19-36-52)
+  src/data/creator_center/creator_center_author_video_stats_diff_<data-datetime>.md   (# current data's ts, UTC, e.g. 2026-09-27_11-36-52)
 
 Tracked, diffable metrics per video:
   total_traffic.play_count              (lifetime play count; API: 总播放量)
@@ -36,29 +36,21 @@ import glob
 from datetime import datetime, timezone, timedelta
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CUR = os.path.join(SRC_DIR, "data", "video", "author_video_stats.json")
-ARCHIVE_DIR = os.path.join(SRC_DIR, "data", "video", "archive")
-OUT_DIR = os.path.join(SRC_DIR, "data", "video")
-VIDEOS_LIST = os.path.join(SRC_DIR, "data", "video", "author_videos.json")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+from filestamp import batch_stamp, stamp_from_iso  # UTC-only filename stamps
+from datetime_util import beijing_display as bj  # display time, Beijing labelled (UTC+8)
+
+CUR = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_video_stats.json")
+ARCHIVE_DIR = os.path.join(SRC_DIR, "data", "creator_center", "archive")
+OUT_DIR = os.path.join(SRC_DIR, "data", "creator_center")
+VIDEOS_LIST = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
 
 # canonical title source: author_videos.json (titles[].title / text).
 # author_video_stats.json weibo_info is null for most videos, so do NOT rely on it.
 VMAP = {}
 
 BEIJING = timezone(timedelta(hours=8))
-
-
-def bj(dt_str):
-    if not dt_str:
-        return "?"
-    s = dt_str.replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(s)
-    except Exception:
-        return dt_str
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(BEIJING).strftime("%Y-%m-%d %H:%M")
 
 
 def load(path):
@@ -163,17 +155,18 @@ def humanize_delta(v):
 
 
 def find_previous(cur):
-    pat = os.path.join(ARCHIVE_DIR, "author_video_stats_*.json")
+    pat = os.path.join(ARCHIVE_DIR, "creator_center_author_video_stats_*.json")
     files = glob.glob(pat)
     if not files:
         return None
-    # archive filenames embed a UTC stamp (author_video_stats_2026-09-27_06-25-37.json)
+    # archive filenames embed a UTC stamp
+    # (creator_center_author_video_stats_2026-09-27_06-25-37.json)
     # that sorts lexicographically.
     files.sort()
 
     def _stamp_ymd(path):
         name = os.path.basename(path)
-        stamp = name[len("author_video_stats_"):-len(".json")]
+        stamp = name[len("creator_center_author_video_stats_"):-len(".json")]
         # format A: 2026-09-27_06-25-37 ; legacy: 20260927T062537Z
         date_part = stamp.split("_", 1)[0].split("T", 1)[0]
         return date_part.replace("-", "")  # YYYYMMDD
@@ -317,16 +310,14 @@ def main():
 
     out = "\n".join(lines) + "\n"
     # Report filename uses the CURRENT DATA's own timestamp (NOT the run time),
-    # down to the second, matching the "本次" time shown in the report header.
+    # down to the second, in UTC (see filestamp.py) -- matching the "本次" time
+    # shown in the report header and keeping every generated file on one UTC
+    # convention.
     cu = (cur.get("meta", {}) or {}).get("updated_at")
-    if cu:
-        dt = datetime.fromisoformat(cu)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        stamp = dt.astimezone(BEIJING).strftime("%Y-%m-%d_%H-%M-%S")
-    else:
-        stamp = datetime.now(BEIJING).strftime("%Y-%m-%d_%H-%M-%S")
-    out_path = os.path.join(OUT_DIR, "author_video_stats_diff_%s.md" % stamp)
+    stamp = stamp_from_iso(cu) if cu else None
+    if not stamp:
+        stamp = batch_stamp()  # fallback: current UTC time
+    out_path = os.path.join(OUT_DIR, "creator_center_author_video_stats_diff_%s.md" % stamp)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(out)
     print("wrote ->", out_path)

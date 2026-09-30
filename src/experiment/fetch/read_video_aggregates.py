@@ -27,7 +27,7 @@ NOTE: do NOT use module=sum_core for yesterday -- that endpoint only returns
 播放量 + 播放时长. video_core&period=1 is the rich one (all 6 metrics).
 
 Usage:
-  venvs/test-env/Scripts/python.exe src/experiment/fetch/read_backend_aggregate.py
+  venvs/test-env/Scripts/python.exe src/experiment/fetch/read_video_aggregates.py
 """
 import os as _os
 import json as _json
@@ -50,6 +50,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
+from filestamp import batch_stamp
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Canonical English metric keys (these are the API's own item_subtype names).
@@ -187,9 +188,9 @@ def main():
         "yesterday_top5_play": top5,
     }
 
-    os.makedirs(os.path.join(SRC_DIR, "data", "backend"), exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    path = os.path.join(SRC_DIR, "data", "backend", "backend_aggregate_%s.json" % stamp)
+    os.makedirs(os.path.join(SRC_DIR, "data", "creator_center"), exist_ok=True)
+    stamp = batch_stamp()
+    path = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_video_aggregates_%s.json" % stamp)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(snapshot, f, ensure_ascii=False, indent=2)
 
