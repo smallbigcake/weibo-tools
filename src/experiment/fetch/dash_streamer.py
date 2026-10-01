@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))  # -> <root>/src
 
 from constants import BROWSER_USER_AGENT as UA
+from beacon_engine import _log_http
 
 # Referer for the byte-range requests (same bare value simulated_watch used).
 CREATOR_REF = "https://weibo.com/"
@@ -79,6 +80,10 @@ class DashStreamer:
                    "Range": "bytes=%d-%d" % (self.pos, end)}
         try:
             r = self.session.get(self.url, headers=headers, timeout=30000, stream=True)
+            # Full HTTP log like the JSON beacons, but OMIT the response body:
+            # it is a video byte-range chunk, far too large to dump. Request
+            # headers/body and response status + headers are still printed.
+            _log_http(r, "dash " + self.label, include_resp_body=False)
             status = r.status_code
             cr = r.headers.get("Content-Range") or r.headers.get("content-range")
             if cr and "/" in cr:

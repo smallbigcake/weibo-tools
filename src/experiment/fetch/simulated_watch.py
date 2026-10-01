@@ -77,7 +77,7 @@ from beacon_engine import (  # noqa: E402
     _viewer_session, _post_report_step, _post_h5playlog_step,
     _post_playstatistics_step, _post_read_step, _post_action_step,
     _post_rum_step, _rum_transaction,
-    build_sequence, get_video_list, UA, req_host_value,
+    build_sequence, get_video_list, UA, req_host_value, first_cursor_of,
     _http_ok, log as _beacon_log,
 )
 # DASH url selection + byte-fetch live in dash_streamer.py.
@@ -117,6 +117,28 @@ def setup_batch_log():
 # --------------------------------------------------------------------------
 # Waterfall source: obtain signed DASH playback URLs as the VIEWER
 # --------------------------------------------------------------------------
+def _actionlog_uuid_of(v):
+    """Extract the post's `actionlog.uuid` from a getWaterFallContent item -- the
+    field the real browser sends as playstatistics `keys`/`uuid` (verified against
+    the weibo-pro-next bundle and the waterfall HAR: url_struct[0].actionlog.uuid
+    == page_info.cards[0].actionlog.uuid). Returns None when absent."""
+    for us in (v.get("url_struct") or []):
+        if isinstance(us, dict):
+            au = (us.get("actionlog") or {}).get("uuid")
+            if au:
+                return au
+    pi = v.get("page_info") or {}
+    au = (pi.get("actionlog") or {}).get("uuid")
+    if au:
+        return au
+    for c in (pi.get("cards") or []):
+        if isinstance(c, dict):
+            au = (c.get("actionlog") or {}).get("uuid")
+            if au:
+                return au
+    return None
+
+
 def fetch_waterfall_page(session, uid, cursor="0", count=20):
     """One page of getWaterFallContent (viewer). Returns (items, next_cursor).
     items: [{mid, oid(object_id), duration, media_info, title, rid}].
@@ -150,6 +172,7 @@ def fetch_waterfall_page(session, uid, cursor="0", count=20):
                                                  # format "<pos>_0_0_<pageId>_0_0_0"
             "title": (((v.get("titles") or [{}])[0].get("title", ""))
                       if v.get("titles") else (v.get("text") or "")),
+            "actionlog_uuid": _actionlog_uuid_of(v),  # playstatistics keys/uuid
         })
     nxt = str((data.get("data") or {}).get("next_cursor") or "")
     return out, nxt
@@ -226,7 +249,7 @@ def _record(results, endpoint, **fields):
     return rec
 
 
-def watch_one(session, video, results, args):
+def watch_one(session, video, results, args, first_cursor=None):
     mid = video["mid"]
     oid = video["oid"]
     duration = video["duration"]
@@ -270,19 +293,24 @@ def watch_one(session, video, results, args):
     # server has no organic-view anchor and the play/read is never credited.
     log.info("  [burst] action(4288 profile) + action(7165 video)")
     _post_action_step(session, "4288", "20000366",
-                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID), results)
+                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID), results,
+                     first_cursor=first_cursor)
     _post_action_step(session, "7165", "20000393",
-                     "vuid:%s|welfare:0" % AUTHOR_UID, results)
+                     "vuid:%s|welfare:0" % AUTHOR_UID, results,
+                     first_cursor=first_cursor)
     # CHANNEL 6 (RUM): one page-load transaction at session start (the browser's
     # first rum event), for client-session fidelity.
     _post_rum_step(session,
                    [_rum_transaction("page-load", "/u/:id", 1500)],
                    results, label="page-load")
     log.info("  [burst] report(pt=0,sec=0) + playstatistics + h5playlog(start)")
-    _post_report_step(session, mid, oid, duration, "0", 0, results)
-    _post_playstatistics_step(session, mid, media_id, results)
+    _post_report_step(session, mid, oid, duration, "0", 0, results,
+                      first_cursor=first_cursor)
+    _post_playstatistics_step(session, mid, media_id, results,
+                              actionlog_uuid=video.get("actionlog_uuid"),
+                              first_cursor=first_cursor)
     _post_h5playlog_step(session, mid, oid, duration, "0", 0, play_time, False,
-                         results, sid=sid)
+                         results, sid=sid, first_cursor=first_cursor)
 
     # ---- sequence of progress heartbeats, interleaved with DASH byte fetch ----
     seq = build_sequence(duration, args.cadence)
@@ -297,7 +325,7 @@ def watch_one(session, video, results, args):
         _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
                              play_time, is_last, results, sid=sid)
         _post_read_step(session, mid, int(min(sec, duration) * 1000), results,
-                        rid=rid)
+                        rid=rid, first_cursor=first_cursor)
         # CHANNEL 6 (RUM): one http-request transaction per heartbeat (summarizing
         # this tick's beacon round), mirroring the browser's per-XHR rum sends.
         _post_rum_step(session,
@@ -449,6 +477,11 @@ def run_watch(session, window, args, results, t0):
     # built once; only used for oid/duration. The expiring CDN URL is re-fetched
     # fresh per video (see loop) because a full round spans hours (> URL ttl=3600s).
     wmap = get_media_map(session, args.uid, want_mids, args.days)
+    # first_cursor = the FIRST video's mid in the author's video list (the page's
+    # initial cursor), constant for the whole page. It is what the browser sends in
+    # the Referer/reqHost as first_cursor=<firstVideoMid>&layerid=<mid>. Shared with
+    # the replay_one driver via beacon_engine.first_cursor_of().
+    first_cursor = first_cursor_of(wmap)
 
     ok = fail = 0
     watched_seconds = 0  # total duration of the videos actually watched
@@ -469,11 +502,12 @@ def run_watch(session, window, args, results, t0):
                                      or v.get("duration") or 0),
                      "media_info": mi,
                      "rid": base.get("rid"),  # real read-log id from waterfall
-                     "title": v.get("title") or base.get("title") or ""}
+                     "title": v.get("title") or base.get("title") or "",
+                     "actionlog_uuid": base.get("actionlog_uuid")}
             log.info("=== [WATCH] round %d/%d  video %d/%d  mid=%s  title=%s ===",
                      rnd, args.rounds, vi, len(window), v["mid"],
                      (video["title"] or "")[:80])
-            g = watch_one(session, video, results, args)
+            g = watch_one(session, video, results, args, first_cursor)
             if g is True:
                 ok += 1
                 watched_seconds += int(video["duration"] or 0)

@@ -101,6 +101,19 @@ def pub_time(mid):
         return "?"
 
 
+def pub_ymd(mid):
+    # publish date as an int YYYYMMDD (0 if unknown) for sorting -- newest first.
+    # Unknown publish times sort to the BOTTOM under reverse=True.
+    ct = (VMAP.get(mid) or {}).get("create_time")
+    if not ct:
+        return 0
+    try:
+        d = datetime.fromtimestamp(ct / 1000, tz=BEIJING)
+        return d.year * 10000 + d.month * 100 + d.day
+    except Exception:
+        return 0
+
+
 def _sum_series(series):
     s = 0
     for d in (series or []):
@@ -263,8 +276,8 @@ def main():
         lines.append("")
         lines.append("| mid | 标题 | 发布时间 | 累计播放 Δ | 累计时长 Δ | 发布7天播放 | 发布7天时长(m) | 转发 Δ | 评论 Δ | 点赞 Δ | 清晰度 Δ |")
         lines.append("|-----|------|----------|-----------|-----------|------------|--------------|--------|--------|--------|----------|")
-        # sort by absolute cumulative-play delta desc (most-affected first)
-        for mid, t, cm, pm in sorted(changed, key=lambda x: abs(x[2]["play"] - x[3]["play"]), reverse=True):
+        # sort by publish time, newest first (descending)
+        for mid, t, cm, pm in sorted(changed, key=lambda x: pub_ymd(x[0]), reverse=True):
             lines.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
                 mid,
                 (t[:48] + "…") if len(t) > 49 else t,
@@ -285,7 +298,7 @@ def main():
         lines.append("")
         lines.append("| mid | 标题 | 发布时间 | 累计播放 | 累计时长 | 发布7天播放 | 发布7天时长(m) | 清晰度 |")
         lines.append("|-----|------|----------|---------|---------|------------|--------------|--------|")
-        for mid, t, cm in new_videos:
+        for mid, t, cm in sorted(new_videos, key=lambda x: pub_ymd(x[0]), reverse=True):
             lines.append("| %s | %s | %s | %s | %s | %s | %s | %s |" % (
                 mid, (t[:48] + "…") if len(t) > 49 else t, pub_time(mid),
                 fmt_num(cm["play"]),
@@ -300,7 +313,7 @@ def main():
         lines.append("")
         lines.append("| mid | 标题 | 前次累计播放 |")
         lines.append("|-----|------|------------|")
-        for mid, t, pm in gone:
+        for mid, t, pm in sorted(gone, key=lambda x: pub_ymd(x[0]), reverse=True):
             lines.append("| %s | %s | %s |" % (mid, (t[:48] + "…") if len(t) > 49 else t, fmt_num(pm["play"])))
         lines.append("")
 

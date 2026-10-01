@@ -90,6 +90,7 @@ import hashlib
 import json
 import os
 import random
+import string
 import sys
 import time
 import uuid
@@ -196,9 +197,12 @@ def _redact_headers(headers):
     return out
 
 
-def _log_http(r, label):
-    """Dump the FULL request + response (status, headers, body) of one HTTP call
-    to the beacon_engine logger for BOTH channels (file only via DEBUG)."""
+def _log_http(r, label, include_resp_body=True):
+    """Dump the request + response of one HTTP call to the logger (file only via
+    DEBUG). By default the FULL body is dumped (used by the small JSON beacons);
+    pass `include_resp_body=False` for large-binary responses (e.g. DASH video
+    chunk GETs) to skip the response body while STILL logging request
+    headers/body and response status + headers."""
     req = getattr(r, 'request', None)
     log.debug("  [%s] >>> REQUEST %s %s" % (label,
                getattr(req, 'method', 'POST'), getattr(req, 'url', r.url)))
@@ -218,7 +222,10 @@ def _log_http(r, label):
         log.debug("  resp headers: %s" % _redact_headers(r.headers))
     except Exception:
         pass
-    log.debug("  resp body   : %s" % (r.text or ''))
+    if include_resp_body:
+        log.debug("  resp body   : %s" % (r.text or ''))
+    else:
+        log.debug("  resp body   : (omitted: large binary payload)")
 
 
 def _daily_log_path():
@@ -427,12 +434,34 @@ def _delta(a, b):
 # --------------------------------------------------------------------------
 # Channel 1: play_history/report.json ; Channel 2: ajax/log/h5playlog
 # --------------------------------------------------------------------------
-def req_host_value(mid):
-    # Browser reqHost (a query param on report.json, NOT the HTTP Referer):
-    #   https://weibo.com/u/<AUTHOR>?tabtype=newVideo&first_cursor=<mid>&layerid=<mid>
-    # first_cursor and layerid both == the post mid the viewer is watching from.
+def req_host_value(mid, first_cursor=None):
+    # Browser reqHost / Referer when a video layer is open:
+    #   https://weibo.com/u/<AUTHOR>?tabtype=newVideo&first_cursor=<firstVideoMid>&layerid=<mid>
+    # first_cursor is the cursor of the FIRST video in the author's video list
+    # (constant for the whole page); layerid is the mid of the video being watched.
+    # Callers that don't know the first video pass first_cursor=None and we fall
+    # back to mid (the OLD, slightly-wrong value) for backward compatibility.
+    fc = first_cursor if first_cursor is not None else mid
     return "https://weibo.com/u/%s?tabtype=newVideo&first_cursor=%s&layerid=%s" % (
-        AUTHOR_UID, mid, mid)
+        AUTHOR_UID, fc, mid)
+
+
+def first_cursor_of(items):
+    """Return the FIRST video's mid -- the author's video-list initial cursor
+    (constant for the whole page), used in the playback beacons' Referer/reqHost
+    as first_cursor=<firstVideoMid>. Accepts EITHER:
+      * a dict keyed by mid (e.g. get_media_map's wmap) -> first key, or
+      * an iterable of video dicts (e.g. get_video_list's window) -> first .mid.
+    Returns None when there are no items. Shared by both watch_one (via
+    run_watch's wmap) and replay_one (via beacon_engine.main's window) so the
+    page-URL first_cursor is computed identically in both drivers."""
+    if isinstance(items, dict):
+        items = iter(items.keys())
+    for v in items:
+        mid = v.get("mid") if isinstance(v, dict) else v
+        if mid:
+            return mid
+    return None
 
 
 def _record(results, endpoint, **fields):
@@ -442,7 +471,8 @@ def _record(results, endpoint, **fields):
     return rec
 
 
-def _post_report_step(session, mid, oid, duration, play_type, sec, results):
+def _post_report_step(session, mid, oid, duration, play_type, sec, results,
+                      first_cursor=None):
     """One report.json heartbeat (CHANNEL 1). Records the server response.
 
     Faithful to the 2026-09-23 waterfall watch HAR. The browser sends:
@@ -461,7 +491,7 @@ def _post_report_step(session, mid, oid, duration, play_type, sec, results):
         "id_type": "0",
         "oid": str(oid),
         "is_contribution": "0",
-        "reqHost": req_host_value(mid),
+        "reqHost": req_host_value(mid, first_cursor),
         "seconds": str(sec),
     }
     url = REPORT_URL + "?" + urlencode(params)
@@ -469,7 +499,7 @@ def _post_report_step(session, mid, oid, duration, play_type, sec, results):
     ec = None
     try:
         r = session.post(url, headers={"User-Agent": UA,
-                                        "Referer": req_host_value(mid)},
+                                        "Referer": req_host_value(mid, first_cursor)},
                          timeout=20000)
         status = r.status_code
         try:
@@ -541,7 +571,7 @@ def build_h5playlog_data(mid, oid, duration, playduration_ms,
 
 
 def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
-                         play_time, is_last, results, sid=None):
+                         play_time, is_last, results, sid=None, first_cursor=None):
     """One ajax/log/h5playlog beacon (CHANNEL 2). Records the server response.
 
     valid_play_duration == cumulative watched position (mirrors the browser's
@@ -559,16 +589,18 @@ def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
     ec = None
     xsrf = session.cookies.get("XSRF-TOKEN", domain="weibo.com")
     h5_headers = {"User-Agent": UA,
-                  "Referer": WATCH_REFERER,
+                  "Referer": req_host_value(mid, first_cursor),
                   "x-requested-with": "XMLHttpRequest"}
     if xsrf:
         h5_headers["X-Xsrf-Token"] = xsrf
+    # Fidelity: the browser uses `new FormData()` which emits a Chrome-style
+    # `----WebKitFormBoundary<16 alnum>` boundary. The requests `files=` default
+    # (a 32-hex boundary) is a detectable fingerprint, so build the raw body
+    # with the shared build_webkit_multipart helper (same as playstatistics).
+    body, h5_headers["Content-Type"] = build_webkit_multipart(
+        [("data", data), ("key", key), ("sig", sig)])
     try:
-        r = session.post(H5PLAYLOG_URL,
-                         files={"data": (None, data),
-                                "key": (None, key),
-                                "sig": (None, sig)},
-                         headers=h5_headers,
+        r = session.post(H5PLAYLOG_URL, data=body, headers=h5_headers,
                          timeout=20000)
         status = r.status_code
         try:
@@ -604,17 +636,22 @@ def md5(s):
     return hashlib.md5(s.encode("utf-8")).hexdigest()
 
 
-def build_playstatistics(mid, media_id, viewer_uid):
+def build_playstatistics(mid, media_id, viewer_uid, actionlog_uuid=None):
     """Return (data, key, sig) for ONE playstatistics beacon, exactly as the
     PlayStatistics video.js plugin builds it.
 
     data = JSON.stringify({uid, mid, keys, type:"feedvideo", uuid, media_id})
     key  = Log_<rand5>_<ts(ms)><rand4><count>
     sig  = md5(data + key + "yixiong&zhaolong5")
+
+    `keys` and `uuid` are the SAME value: the post's `actionlog.uuid` (recovered
+    from the profile waterfall / getCollectionList in the weibo-pro-next bundle --
+    see src/tmp/inspect_*). When `actionlog_uuid` is None we fall back to a random
+    number so the old behavior (and the quick_watch path) still works.
     """
-    rk = random.randint(10 ** 12, 10 ** 13 - 1)
-    data = ('{"uid":%s,"mid":"%s","keys":%d,"type":"feedvideo",'
-            '"uuid":%d,"media_id":"%s"}' % (viewer_uid, mid, rk, rk, media_id))
+    rk = actionlog_uuid if actionlog_uuid is not None else random.randint(10 ** 12, 10 ** 13 - 1)
+    data = ('{"uid":%s,"mid":"%s","keys":%s,"type":"feedvideo",'
+            '"uuid":%s,"media_id":"%s"}' % (viewer_uid, mid, rk, rk, media_id))
     ts = int(time.time() * 1000)
     rand4 = random.randint(0, 9999)
     key = "Log_%s_%d%d%d" % (_rand5(), ts, rand4, _PS_COUNT[0])
@@ -634,27 +671,62 @@ def _xsrf_from(session):
             return ""
 
 
-def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5, referer=None):
+def _multipart_body(fields, boundary):
+    """Build a raw multipart/form-data body (bytes) the way the browser's
+    `new FormData()` does: NO `filename` on the parts, CRLF line endings. The
+    boundary token already includes the leading `----WebKitFormBoundary` so the
+    on-wire delimiter is `--<token>` (six dashes), matching Chrome."""
+    lines = []
+    for name, value in fields:
+        lines.append("--%s" % boundary)
+        lines.append('Content-Disposition: form-data; name="%s"' % name)
+        lines.append("")
+        lines.append(str(value))
+    lines.append("--%s--" % boundary)
+    return ("\r\n".join(lines)).encode("utf-8") + b"\r\n"
+
+
+def build_webkit_multipart(fields):
+    """Generate a Chrome-style `----WebKitFormBoundary<16 alnum>` boundary, build
+    the raw multipart/form-data body, and return `(body_bytes, content_type)`.
+
+    The browser's `new FormData()` emits exactly this; requests' `files=` default
+    uses a 32-hex boundary, which is a detectable fingerprint -- so both the
+    h5playlog and playstatistics channels go through THIS one helper instead of
+    duplicating the boundary generation.
+    """
+    boundary = "----WebKitFormBoundary" + "".join(
+        random.choices(string.ascii_letters + string.digits, k=16))
+    return _multipart_body(fields, boundary), "multipart/form-data; boundary=%s" % boundary
+
+
+def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5,
+                        referer=None, actionlog_uuid=None, first_cursor=None):
     """POST the playstatistics beacon ONCE. Returns (http_status, error_code, response).
 
-    `referer` defaults to a bare "https://weibo.com/"; callers pass the real watch
-    page for fidelity. Requires `X-Xsrf-Token` (from the XSRF-TOKEN cookie) +
-    `x-requested-with`. The server tolerates a wrong sig, but we send the EXACT
-    correct one (recovered from the weibo-pro-next bundle, 2026-09-21).
+    Fidelity notes (2026-10-01, compared byte-for-byte against the real browser):
+      * `keys`/`uuid` = the post's `actionlog.uuid` (passed in; falls back to a
+        random number when None). See build_playstatistics().
+      * The body is sent as multipart/form-data with a Chrome-style boundary
+        `----WebKitFormBoundary<16 alnum>` -- the browser uses FormData, which
+        emits exactly that; the requests `files=` default (a 32-hex boundary) is
+        a detectable fingerprint.
+      * The Referer is the author's profile page WITH `&first_cursor=<firstVideoMid>`
+        and `&layerid=<mid>` -- identical to what the real browser sends when a
+        video is opened in the feed layer (req_host_value(mid, first_cursor)).
+        A bare profile URL is the old, less-faithful value.
     """
-    data, key, sig = build_playstatistics(mid, media_id, viewer_uid)
+    data, key, sig = build_playstatistics(mid, media_id, viewer_uid, actionlog_uuid)
     headers = {"User-Agent": UA,
-               "Referer": referer or "https://weibo.com/",
+               "Referer": referer or req_host_value(mid, first_cursor) or "https://weibo.com/",
                "x-requested-with": "XMLHttpRequest"}
     xsrf = _xsrf_from(session)
     if xsrf:
         headers["X-Xsrf-Token"] = xsrf
+    body, headers["Content-Type"] = build_webkit_multipart(
+        [("data", data), ("key", key), ("sig", sig)])
     try:
-        r = session.post(PLAYSTAT_URL,
-                         files={"data": (None, data),
-                                "key": (None, key),
-                                "sig": (None, sig)},
-                         headers=headers, timeout=20000)
+        r = session.post(PLAYSTAT_URL, data=body, headers=headers, timeout=20000)
         status = r.status_code
         try:
             j = r.json()
@@ -666,12 +738,17 @@ def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5, referer=N
         return None, str(ex), None
 
 
-def _post_playstatistics_step(session, mid, media_id, results):
+def _post_playstatistics_step(session, mid, media_id, results, actionlog_uuid=None,
+                              first_cursor=None):
     """CHANNEL 3: one `aj/video/playstatistics?ajwvr=6` beacon at play start.
     Uses the local `send_playstatistics` (canonical algorithm recovered from the
-    weibo-pro-next bundle, verified 2026-09-21)."""
+    weibo-pro-next bundle, verified 2026-09-21). Pass `actionlog_uuid` (the
+    post's real actionlog uuid) so `keys`/`uuid` match the browser, and
+    `first_cursor` (the first video's mid) so the Referer matches the browser's
+    page URL (first_cursor=<firstVideoMid>&layerid=<currentVideoMid>)."""
     status, ec, r = send_playstatistics(session, mid, media_id, VIEWER_UID, 0.5,
-                                        referer=WATCH_REFERER)
+                                        referer=req_host_value(mid, first_cursor),
+                                        actionlog_uuid=actionlog_uuid)
     log.info("  [playstats] mid=%s media_id=%s -> %s err=%s"
              % (mid, media_id, status, ec))
     if r is not None:
@@ -715,7 +792,10 @@ def build_read_log(mid, read_ms, rid=None):
         "duration": int(read_ms),
         "read_duration": int(read_ms),
     }
-    return json.dumps([rec], ensure_ascii=False)
+    # COMPACT separators, byte-faithful to the browser: the captured HAR sends
+    # [{"act":"PC_real_read",...}] with NO space after ':' or ','. json.dumps'
+    # default would add them. See src/tmp/compare_read_body.py.
+    return json.dumps([rec], ensure_ascii=False, separators=(",", ":"))
 
 
 def send_read_log(session, mid, read_ms, rid=None, delay=0.5, referer=None):
@@ -738,7 +818,15 @@ def send_read_log(session, mid, read_ms, rid=None, delay=0.5, referer=None):
     if xsrf:
         headers["X-Xsrf-Token"] = xsrf
     try:
-        r = session.post(READ_URL, json=payload, headers=headers, timeout=20000)
+        # Byte-faithful to the browser. requests' `json=` serialises with
+        # json.dumps DEFAULTS (', ' / ': '), adding whitespace the real client
+        # does not send (~24 bytes). Serialise compactly ourselves and send the
+        # utf-8 bytes with an explicit application/json.
+        # Evidence: src/tmp/compare_read_body.py vs the 2026-09-18 browser HAR.
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(payload, ensure_ascii=False,
+                          separators=(",", ":")).encode("utf-8")
+        r = session.post(READ_URL, data=body, headers=headers, timeout=20000)
         status = r.status_code
         try:
             j = r.json()
@@ -750,7 +838,7 @@ def send_read_log(session, mid, read_ms, rid=None, delay=0.5, referer=None):
         return None, str(ex), None
 
 
-def _post_read_step(session, mid, read_ms, results, rid=None):
+def _post_read_step(session, mid, read_ms, results, rid=None, first_cursor=None):
     """CHANNEL 4: one `ajax/log/read` (PC_real_read) beacon, read_duration = cumulative
     watched ms. Recovered from the 2026-09-18 HAR; the strongest candidate for the
     creator-center PLAY DURATION source (h5playlog `valid_play_duration` did NOT credit
@@ -761,7 +849,7 @@ def _post_read_step(session, mid, read_ms, results, rid=None):
     the cumulative read_duration into a single credited watch.
     """
     status, ec, r = send_read_log(session, mid, read_ms, rid=rid,
-                                  referer=WATCH_REFERER)
+                                  referer=req_host_value(mid, first_cursor))
     log.info("  [read] mid=%s read_ms=%d rid=%s -> %s err=%s"
              % (mid, read_ms, (rid or "?"), status, ec))
     if r is not None:
@@ -770,7 +858,8 @@ def _post_read_step(session, mid, read_ms, results, rid=None):
             status=status, error_code=ec)
 
 
-def _post_action_step(session, act_code, uicode, ext, results, label=None):
+def _post_action_step(session, act_code, uicode, ext, results, label=None,
+                      first_cursor=None):
     """CHANNEL 5 (NEW, 2026-09-25): one `ajax/log/action` EXPOSURE beacon.
 
     Recovered from weibo-video-watch-waterfall-2026-09-23.har, where the real
@@ -794,6 +883,14 @@ def _post_action_step(session, act_code, uicode, ext, results, label=None):
         "ext": ext,
         "t": str(int(time.time() * 1000)),
     }
+    # Referer fidelity (2026-10-01, verified against the real browser):
+    #   * act_code=4288 (profile expose): bare profile page -- NO first_cursor/layerid
+    #   * act_code=7165 (video expose):   page WITH first_cursor -- NO layerid
+    if act_code == "4288":
+        referer = WATCH_REFERER
+    else:
+        referer = (WATCH_REFERER + "&first_cursor=%s" % first_cursor
+                   if first_cursor is not None else WATCH_REFERER)
     url = ACTION_URL + "?" + urlencode(params)
     status = err = None
     ec = None
@@ -801,7 +898,7 @@ def _post_action_step(session, act_code, uicode, ext, results, label=None):
         r = session.get(url,
                         headers={"User-Agent": UA,
                                  "Accept": "application/json, text/plain, */*",
-                                 "Referer": WATCH_REFERER,
+                                 "Referer": referer,
                                  "x-requested-with": "XMLHttpRequest"},
                         timeout=20000)
         status = r.status_code
@@ -908,7 +1005,7 @@ def _post_rum_step(session, transactions, results, label=None):
 
 
 def replay_one(session, mid, oid, duration, seq, delay, play_time, results, channels,
-               rid=None):
+               rid=None, first_cursor=None):
     """Replay ONE video.
     * single -> report.json only, every heartbeat.
     * dual   -> report.json THEN h5playlog, interleaved per heartbeat.
@@ -937,9 +1034,11 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
     # (the real browser does this; without it the watch is never credited).
     log.info("  [burst] action(4288 profile) + action(7165 video)")
     _post_action_step(session, "4288", "20000366",
-                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID), results)
+                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID), results,
+                     first_cursor=first_cursor)
     _post_action_step(session, "7165", "20000393",
-                     "vuid:%s|welfare:0" % AUTHOR_UID, results)
+                     "vuid:%s|welfare:0" % AUTHOR_UID, results,
+                     first_cursor=first_cursor)
     # CHANNEL 6 (RUM): one page-load transaction at session start (the browser's
     # first rum event), for client-session fidelity.
     _post_rum_step(session,
@@ -947,17 +1046,21 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
                    results, label="page-load")
     if channels in ("triple", "quad"):
         if media_id:
-            _post_playstatistics_step(session, mid, media_id, results)
+            _post_playstatistics_step(session, mid, media_id, results,
+                                      first_cursor=first_cursor)
         else:
             log.warning("  [%s] skip playstatistics (no media_id from oid=%s)", channels, oid)
     full = int(round(duration or 0))
     for i, (play_type, sec) in enumerate(seq):
-        _post_report_step(session, mid, oid, duration, play_type, sec, results)
+        _post_report_step(session, mid, oid, duration, play_type, sec, results,
+                          first_cursor=first_cursor)
         if channels in ("dual", "triple", "quad"):
             _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
-                                 play_time, i == len(seq) - 1, results, sid=sid)
+                                 play_time, i == len(seq) - 1, results, sid=sid,
+                                 first_cursor=first_cursor)
         if channels == "quad":
-            _post_read_step(session, mid, int(min(sec, full) * 1000), results, rid=rid)
+            _post_read_step(session, mid, int(min(sec, full) * 1000), results, rid=rid,
+                           first_cursor=first_cursor)
         # CHANNEL 6 (RUM): one http-request transaction per heartbeat (summarizing
         # this tick's beacon round), mirroring the browser's per-XHR rum sends.
         _post_rum_step(session,
@@ -1141,6 +1244,12 @@ def main():
                 "ok": None, "fail": None, "total_videos_played": None,
                 "elapsed_seconds": None}
 
+    # first_cursor = the FIRST video's mid of the author's video list (the page's
+    # initial cursor), constant for the whole page; threaded into every beacon's
+    # Referer/reqHost via replay_one -> _post_*_step. Shared with the watch_one
+    # driver through beacon_engine.first_cursor_of().
+    first_cursor = first_cursor_of(videos)
+
     # Author session (for live metrics / aggregate) + viewer session (replay).
     a_auth = Auth()
     a_auth.uid = AUTHOR_UID
@@ -1172,7 +1281,7 @@ def main():
     except Exception as _ex:
         log.warning("failed to source rid map from waterfall: %s", _ex)
 
-    def replay_video_entry(v, tag):
+    def replay_video_entry(v, tag, first_cursor=None):
         """Replay one video (channels-aware); return True if all sends succeeded."""
         nonlocal total_watch_seconds
         mid = v["mid"]
@@ -1214,7 +1323,7 @@ def main():
 
         for rnd in range(1, args.rounds + 1):
             log.info("=== round %d (channels=%s) ===", rnd, channels)
-            g = replay_video_entry(target, "R%d#T" % rnd)
+            g = replay_video_entry(target, "R%d#T" % rnd, first_cursor=first_cursor)
             if g is True:
                 ok += 1
             elif g is False:
@@ -1268,7 +1377,7 @@ def main():
         for rnd in range(1, args.rounds + 1):
             log.info("=== round %d (channels=%s) ===", rnd, channels)
             for idx, v in enumerate(play_set, 1):
-                g = replay_video_entry(v, "R%d#%d" % (rnd, idx))
+                g = replay_video_entry(v, "R%d#%d" % (rnd, idx), first_cursor=first_cursor)
                 if g is True:
                     ok += 1
                 elif g is False:
