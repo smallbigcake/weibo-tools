@@ -205,6 +205,110 @@ def find_previous(cur):
     return chosen
 
 
+AGG_PAT = os.path.join(OUT_DIR, "creator_center_video_aggregates_*.json")
+
+
+def _agg_ymd(path):
+    name = os.path.basename(path)
+    stamp = name[len("creator_center_video_aggregates_"):-len(".json")]
+    date_part = stamp.split("_", 1)[0].split("T", 1)[0]
+    return date_part.replace("-", "")
+
+
+def _agg_block(agg, window, key):
+    blk = get(agg, "aggregates", window, key)
+    return blk if isinstance(blk, dict) else {}
+
+
+def _agg_val(agg, window, key):
+    v = _agg_block(agg, window, key).get("value")
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _agg_unit(agg, window, key):
+    return _agg_block(agg, window, key).get("unit") or ""
+
+
+def _fmt_agg(v, unit):
+    if v is None:
+        return "?"
+    return ("%.2f" % v).rstrip("0").rstrip(".") + (unit or "")
+
+
+def _fmt_agg_delta(d):
+    if d is None:
+        return "?"
+    if d == 0:
+        return "0"
+    return ("+" if d > 0 else "") + ("%.2f" % d).rstrip("0").rstrip(".")
+
+
+def build_account_summary(ref_ymd):
+    """Account-level (creator-center) day-over-day totals, shown at the top of
+    the report. Compares the current day's aggregate file vs the previous day's.
+    Column labels use each file's *fetch* date minus one day (= the platform's 昨日)."""
+    files = sorted(glob.glob(AGG_PAT))
+    if not files:
+        return []
+    cur_files = [f for f in files if _agg_ymd(f) <= ref_ymd]
+    prev_files = [f for f in files if _agg_ymd(f) < ref_ymd]
+    if not cur_files:
+        return []
+    cur_agg = load(cur_files[-1])
+    prev_agg = load(prev_files[-1]) if prev_files else None
+
+    def _yest_label(ymd):
+        d = datetime(int(ymd[:4]), int(ymd[4:6]), int(ymd[6:8])) - timedelta(days=1)
+        return d.strftime("%Y-%m-%d")
+
+    def _ymd_label(ymd):
+        return "%s-%s-%s" % (ymd[:4], ymd[4:6], ymd[6:8])
+
+    cur_yest = _yest_label(_agg_ymd(cur_files[-1]))
+    prev_yest = _yest_label(_agg_ymd(prev_files[-1])) if prev_files else "?"
+    cur_fetch = _ymd_label(_agg_ymd(cur_files[-1]))
+    prev_fetch = _ymd_label(_agg_ymd(prev_files[-1])) if prev_files else "?"
+
+    specs = [
+        ("yesterday", "upload_count", "发布量"),
+        ("yesterday", "play_count", "播放量"),
+        ("yesterday", "play_dura_count", "播放时长"),
+        ("yesterday", "reposts_count", "转发量"),
+        ("yesterday", "comments_count", "评论量"),
+        ("yesterday", "attitudes_count", "点赞量"),
+        ("last_7d", "play_count", "7日播放量"),
+        ("last_7d", "play_dura_count", "7日播放时长"),
+        ("last_7d", "upload_count", "7日发布量"),
+        ("last_7d", "attitudes_count", "7日点赞量"),
+        ("last_30d", "play_count", "30日播放量"),
+        ("last_30d", "play_dura_count", "30日播放时长"),
+        ("last_30d", "upload_count", "30日发布量"),
+        ("last_30d", "attitudes_count", "30日点赞量"),
+    ]
+    out = ["## 创作者中心总数据（账号级 · 日环比）", ""]
+    out.append("数据日：本次抓取(%s) 取平台「昨日」= **%s**；前次抓取(%s) 取平台「昨日」= **%s**。"
+               % (cur_fetch, cur_yest, prev_fetch, prev_yest))
+    out.append("")
+    out.append("| 指标 | %s | %s | Δ |" % (cur_yest, prev_yest))
+    out.append("|------|------|------|---|")
+    for window, key, label in specs:
+        cv = _agg_val(cur_agg, window, key)
+        pv = _agg_val(prev_agg, window, key) if prev_agg else None
+        unit = _agg_unit(cur_agg, window, key)
+        d = (cv - pv) if (cv is not None and pv is not None) else None
+        out.append("| %s | %s | %s | %s |" % (
+            label, _fmt_agg(cv, unit),
+            _fmt_agg(pv, unit) if pv is not None else "?",
+            _fmt_agg_delta(d)))
+    out.append("")
+    out.append("_两列为创作者中心平台每日汇总；Δ = %s − %s。播放时长单位：小时。_" % (cur_yest, prev_yest))
+    out.append("")
+    return out
+
+
 def main():
     if not os.path.exists(CUR):
         print("current file missing: %s" % CUR)
@@ -252,7 +356,9 @@ def main():
         if mid not in cur_videos:
             gone.append((mid, title_of(mid, rec), metrics(rec)))
 
-    cur_upd = bj(cur.get("meta", {}).get("updated_at"))
+    cu_iso = (cur.get("meta", {}) or {}).get("updated_at")
+    cur_upd = bj(cu_iso)
+    ref_ymd = cu_iso[:10].replace("-", "") if cu_iso else datetime.now(timezone.utc).strftime("%Y%m%d")
     prev_upd = bj(prev.get("meta", {}).get("updated_at")) if prev else "?"
 
     lines = []
@@ -270,6 +376,7 @@ def main():
     lines.append("- 累计时长出现负数 Δ 表示 API 把累计总量**往下调**(已观察到老视频累计时长被下调)。"
                  "发布7天播放/时长 列为该视频发布后7天窗口的**当前值**(非Δ)。以下仅列出有变化的视频。")
     lines.append("")
+    lines.extend(build_account_summary(ref_ymd))
 
     if changed:
         lines.append("## 数据变化的视频")

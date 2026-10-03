@@ -104,57 +104,27 @@ _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, _src_root)
 
 from auth import Auth
-from logutil import setup as _setup_logging, utc_formatter
+from logutil import setup as _setup_logging
 from filestamp import batch_stamp, day_stamp, stamp_from_iso
 _setup_logging()  # idempotent; configures the shared weibo.log for other modules
-# Dedicated logger for THIS script: verbose per-request dumps go to a SEPARATE
-# DAILY file (src/log/watch/beacon_engine_YYYYMMDD.log) via a FileHandler. Isolation
-# is by log FILE, not by stdout/stderr stream -- so we intentionally attach only a
-# FileHandler here. propagate=False keeps these dumps out of the shared weibo.log.
+# Library-style logger: this module is the LOW-LEVEL beacon implementation, reused
+# by higher-level scripts, so it owns NO handler and decides nothing about where
+# output lands -- it only names its logger and emits records. The caller wires it:
+#
+#   * orchestrators (simulated_watch.setup_batch_log) merge it into their own
+#     per-run file with logutil.share_handler(beacon_log, handler);
+#   * a script that runs alone can either attach its own handler, or just set
+#     logging.getLogger('beacon_engine').propagate = True to fall through to the
+#     shared weibo.log that logutil.setup() configures.
+#
+# propagate=False by default so the verbose DEBUG request dumps never leak into
+# the shared weibo.log; NullHandler keeps "no caller wired it" silent (instead of
+# Python's last-resort stderr fallback).
 log = logging.getLogger('beacon_engine')
 log.setLevel(logging.DEBUG)
 log.propagate = False
-_qw_fmt = utc_formatter()
-_qw_dir = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    'log', 'watch')
-# Per-batch suffix (timestamp). None => fall back to a DAILY file. Callers that
-# run repeated batches per day (e.g. simulated_watch) call set_log_suffix() once
-# at startup so all beacon dumps land in one batch file instead of interleaving.
-_qw_suffix = None
-
-
-def _qw_log_path():
-    name = _qw_suffix or day_stamp()
-    return os.path.join(_qw_dir, 'beacon_engine_%s.log' % name)
-
-
 if not log.handlers:
-    _qw_file = logging.FileHandler(_qw_log_path(), encoding='utf-8')
-    _qw_file.setLevel(logging.DEBUG)
-    _qw_file.setFormatter(_qw_fmt)
-    log.addHandler(_qw_file)
-
-
-def set_log_suffix(suffix):
-    """Re-point this logger's FileHandler at a per-BATCH file. Call ONCE at
-    startup; rebuilds the handler so any already-added daily handler is replaced
-    and every subsequent beacon dump goes to the batch file."""
-    global _qw_suffix
-    _qw_suffix = suffix
-    path = _qw_log_path()
-    for h in list(log.handlers):
-        if isinstance(h, logging.FileHandler):
-            try:
-                h.close()
-            except Exception:
-                pass
-            log.removeHandler(h)
-    fh = logging.FileHandler(path, encoding='utf-8')
-    fh.setLevel(logging.DEBUG)
-    fh.setFormatter(_qw_fmt)
-    log.addHandler(fh)
-    return path
+    log.addHandler(logging.NullHandler())
 
 
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -473,14 +443,16 @@ def _record(results, endpoint, **fields):
 
 def _post_report_step(session, mid, oid, duration, play_type, sec, results,
                       first_cursor=None):
-    """One report.json heartbeat (CHANNEL 1). Records the server response.
+    """One report.json heartbeat (CHANNEL 1, the JS `HistoryReport` class). Records
+    the server response and RETURNS `next_report_delay_seconds` (the server-driven
+    cadence for the NEXT heartbeat; -1 means stop). Returns None when absent.
 
     Faithful to the 2026-09-23 waterfall watch HAR. The browser sends:
       source/play_type/video_orientation/video_duration/id/id_type/oid/seconds
       PLUS is_contribution=0 and reqHost=<author page url>. `oid` is the FULL
-      "1034:<media_id>" (NOT the type-prefix-only value the old code assumed --
-      that earlier "verified" claim was wrong; the HAR clearly shows the prefix).
-      `seconds` is the watched-seconds (server REQUIRES it, else HTTP 422 / 20359).
+      "1034:<media_id>". `seconds` is the watched-seconds (server REQUIRES it,
+      else HTTP 422 / 20359). The response's `data.next_report_delay_seconds`
+      drives the real browser's periodic re-fire (see HistoryReport.timeupdateHandle).
     """
     params = {
         "source": SOURCE,
@@ -497,6 +469,7 @@ def _post_report_step(session, mid, oid, duration, play_type, sec, results,
     url = REPORT_URL + "?" + urlencode(params)
     body = err = None
     ec = None
+    next_delay = None
     try:
         r = session.post(url, headers={"User-Agent": UA,
                                         "Referer": req_host_value(mid, first_cursor)},
@@ -509,16 +482,21 @@ def _post_report_step(session, mid, oid, duration, play_type, sec, results,
         try:
             j = r.json()
             ec = j.get("error_code") or j.get("errorCode")
+            try:
+                next_delay = (j.get("data") or {}).get("next_report_delay_seconds")
+            except Exception:
+                next_delay = None
         except Exception:
             ec = None
-        log.info("  [report] mid=%s play_type=%s seconds=%s -> %s err=%s"
-                 % (mid, play_type, sec, status, ec))
+        log.info("  [report] mid=%s play_type=%s seconds=%s -> %s err=%s next_delay=%s"
+                 % (mid, play_type, sec, status, ec, next_delay))
         _log_http(r, 'beacon report')
     except Exception as ex:
         status, err = None, str(ex)
         log.warning("  [report] mid=%s -> ERROR %s" % (mid, ex))
     _record(results, "report.json", mid=mid, play_type=play_type, seconds=sec,
             status=status, error_code=ec, error=err, body=body)
+    return next_delay
 
 
 def _rand5():
@@ -528,7 +506,7 @@ def _rand5():
 
 def build_h5playlog_data(mid, oid, duration, playduration_ms,
                          valid_play_duration_ms, play_time, quit_status="",
-                         sid=None):
+                         sid=None, firstframe_time_ms="878"):
     """Build the h5playlog FormData `data` field (semicolon CSV) as the real client
     does. Field order reverse-engineered from the 2026-09-18 HAR; the empty 9th
     field (index 8) is preserved verbatim. sig = md5(data+key+'encryptedString').
@@ -557,7 +535,7 @@ def build_h5playlog_data(mid, oid, duration, playduration_ms,
         str(int(playduration_ms)),       # 10 playduration (ms)
         "success",                       # 11 firstframe_status
         quit_status,                     # 12 quit_status ("" / complete)
-        "878",                           # 13 firstframe_time (ms, constant)
+        str(int(firstframe_time_ms)),    # 13 firstframe_time (ms) = Date.now()-startTime
         "0",                             # 14 startplay_time (ms)
         str(int(valid_play_duration_ms)),# 15 valid_play_duration (ms)
         "",                              # 16 download_size
@@ -571,20 +549,36 @@ def build_h5playlog_data(mid, oid, duration, playduration_ms,
 
 
 def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
-                         play_time, is_last, results, sid=None, first_cursor=None):
+                         play_time, is_last, results, sid=None, first_cursor=None,
+                         valid_play_duration_ms=None, firstframe_time_ms=None,
+                         quit_status=None):
     """One ajax/log/h5playlog beacon (CHANNEL 2). Records the server response.
 
-    valid_play_duration == cumulative watched position (mirrors the browser's
-    per-30s send). `is_last` closes the session with quit_status='complete'.
-    `sid` is a STABLE per-watch session id (see build_h5playlog_data) -- pass the
-    same value for every heartbeat of one video.
+    `sec` is the current PLAYBACK POSITION in seconds (absolute) -> fills
+    `playduration` (= the browser's `floor(currentTime*1000)`). `valid_play_duration_ms`
+    is the valid-play accumulated SINCE THE PREVIOUS h5playlog send and MUST be
+    passed by the caller: the browser resets it to 0 in `_afterSend`, so each
+    beacon reports a DELTA, never the cumulative position. When omitted it falls
+    back to `pos_ms` (legacy delay-driven behaviour). `firstframe_time_ms` is the
+    first-frame latency (`Date.now()-startTime`); defaults to the legacy 878.
+    `is_last` closes the session with quit_status='complete'. Pass `quit_status`
+    explicitly to close it as 'not_complete' instead (stopped mid-way); the
+    official enum is complete / not_complete / cancel / error, filled by
+    PlayLog.dispose from the player state.
+    `sid` is a STABLE per-watch session id -- pass the same value for every beat.
     """
     full = int(round(duration or 0))
-    pos_ms = int(min(sec, full) * 1000)
-    quit_status = "complete" if is_last else ""
+    pos_ms = int(min(sec, full) * 1000)            # playduration = absolute position
+    if valid_play_duration_ms is None:
+        valid_play_duration_ms = pos_ms            # legacy fallback (cumulative)
+    if firstframe_time_ms is None:
+        firstframe_time_ms = "878"                 # legacy constant
+    if quit_status is None:
+        quit_status = "complete" if is_last else ""
     data, key, sig = build_h5playlog_data(
-        mid, oid, duration, pos_ms, pos_ms, play_time, quit_status=quit_status,
-        sid=sid)
+        mid, oid, duration, pos_ms, int(valid_play_duration_ms), play_time,
+        quit_status=quit_status, sid=sid,
+        firstframe_time_ms=firstframe_time_ms)
     body = err = None
     ec = None
     xsrf = session.cookies.get("XSRF-TOKEN", domain="weibo.com")
@@ -612,8 +606,8 @@ def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
             ec = j.get("error_code") or j.get("errorCode")
         except Exception:
             ec = None
-        log.info("  [h5play] mid=%s seconds=%s valid_ms=%d -> %s err=%s"
-                 % (mid, sec, pos_ms, status, ec))
+        log.info("  [h5play] mid=%s seconds=%s playduration_ms=%d valid_ms=%d -> %s err=%s"
+                 % (mid, sec, pos_ms, int(valid_play_duration_ms), status, ec))
         _log_http(r, 'beacon h5playlog')
     except Exception as ex:
         status, err = None, str(ex)

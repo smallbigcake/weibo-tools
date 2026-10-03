@@ -51,10 +51,12 @@ class FakeSession:
     def __init__(self):
         self.captured = None
         self.calls = []
+        self.last_body = None
         self.cookies = type("C", (), {"get": lambda *a, **k: None})()
 
     def post(self, url, files=None, data=None, headers=None, timeout=None):
         self.captured = headers
+        self.last_body = data
         self.calls.append((url, headers))
         return _FakeResp()
 
@@ -114,6 +116,87 @@ def test_report_full():
     s = FakeSession()
     be._post_report_step(s, MID, "1034:x", 30, "0", 0, [], first_cursor=FIRST)
     assert s.captured.get("Referer") == FULL
+
+
+def test_h5playlog_valid_play_duration_is_delta():
+    """CRITICAL field-algorithm check (2026-10-01): `playduration` (field #10) is
+    the absolute playback position, while `valid_play_duration` (field #15) is the
+    VALID-PLAY accumulated SINCE THE PREVIOUS h5playlog send -- a DELTA, not the
+    cumulative position. The old delay-driven loop reported the absolute position
+    as valid_play_duration, over-counting it on every heartbeat after the first.
+    This test proves the two are now independent and valid_play_duration == the
+    delta passed in.
+    """
+    import re
+    s = FakeSession()
+    be._post_h5playlog_step(s, MID, "1034:x", 120, "1", 60, "2026-10-01", False, [],
+                           sid="H5_abc", first_cursor=FIRST,
+                           valid_play_duration_ms=30000, firstframe_time_ms=206)
+    body = (s.last_body or b"").decode("utf-8")
+    m = re.search(r'name="data"\r\n\r\n([^\r]*)', body)
+    assert m, body
+    fields = m.group(1).split(";")
+    assert fields[10] == "60000", fields      # playduration = abs pos (60s)
+    assert fields[15] == "30000", fields      # valid_play_duration = DELTA (not 60000)
+    assert fields[13] == "206", fields        # firstframe_time passed through
+
+
+def test_drive_event_player_valid_play_duration_delta():
+    """End-to-end check of the event-driven virtual player (_drive_event_player):
+    h5playlog must fire every ~30s of VALID play, and each heartbeat's
+    valid_play_duration must be the DELTA since the previous send (~30000ms),
+    never the cumulative position. Before the refactor the loop passed the absolute
+    `sec` as valid_play_duration, so the 2nd heartbeat would have shown 60000.
+    """
+    import sys, types
+    sys.path.insert(0, "src/experiment/fetch")
+    import simulated_watch as sw
+
+    captured = []  # (playduration_field, valid_field)
+
+    def fake_post_h5playlog_step(session, mid, oid, duration, play_type, sec,
+                                 play_time, is_last, results, sid=None,
+                                 first_cursor=None, valid_play_duration_ms=None,
+                                 firstframe_time_ms=None):
+        captured.append((int(sec * 1000), int(valid_play_duration_ms or 0), is_last))
+
+    def fake_post_report_step(session, mid, oid, duration, play_type, sec, results,
+                              first_cursor=None):
+        return 30  # server-driven next_report_delay_seconds
+
+    def fake_post_read_step(*a, **k):
+        pass
+
+    saved = (sw._post_h5playlog_step, sw._post_report_step, sw._post_read_step)
+    sw._post_h5playlog_step = fake_post_h5playlog_step
+    sw._post_report_step = fake_post_report_step
+    sw._post_read_step = fake_post_read_step
+    try:
+        # fake args namespace
+        args = types.SimpleNamespace(cadence=30, delay=30, speed=100000)
+        # fake streamer: already "done" so next_chunk/drain are no-ops
+        st = types.SimpleNamespace(done=True, next_chunk=lambda: 0, drain=lambda: None,
+                                    fetched=0, total=1000, label="v")
+        sw._drive_event_player(FakeSession(), MID, "1034:x", 90, [], args,
+                               sid="H5_abc", first_cursor=FIRST, streamers=[st],
+                               watch_start_ms=0, next_delay=30)
+    finally:
+        sw._post_h5playlog_step, sw._post_report_step, sw._post_read_step = saved
+
+    # 90s video => h5playlog at ~30s, ~60s, and final 'ended' (is_last=True)
+    assert len(captured) == 3, captured
+    # every mid-video heartbeat reports valid_play_duration == the 30s DELTA,
+    # never the cumulative position (which would be 60000 / 90000 later on).
+    for pd, vd, is_last in captured:
+        if not is_last:
+            assert vd == 30000, (pd, vd, is_last)
+    # the 2nd heartbeat's valid_play_duration (30000) must NOT equal its
+    # playduration (60000) -- this is the bug the refactor fixed.
+    assert captured[1][1] != captured[1][0], captured
+    # the final 'ended' heartbeat carries quit_status='complete' (is_last True)
+    assert captured[-1][2] is True, captured
+    # playduration (field #10) is the absolute position, growing across heartbeats
+    assert captured[0][0] == 30000 and captured[1][0] == 60000, captured
 
 
 def test_first_cursor_of():

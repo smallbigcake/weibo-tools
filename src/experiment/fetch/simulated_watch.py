@@ -50,6 +50,7 @@ import logging
 import sys
 import time
 import shutil
+import re
 from datetime import datetime, timezone, timedelta
 
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
@@ -112,6 +113,54 @@ def setup_batch_log():
     share_handler(_beacon_log, _fh)
     share_handler(_dash_log, _fh)
     return _fh
+
+
+# --------------------------------------------------------------------------
+# Duration helpers: parse "1h" / "300m" / "7200s" / "1h30m5s" (bare = seconds)
+# --------------------------------------------------------------------------
+_DURATION_UNITS = {"h": 3600.0, "m": 60.0, "s": 1.0}
+_DURATION_TOKEN = re.compile(r"(\d+(?:\.\d+)?)\s*([hms])")
+
+
+def parse_duration(text):
+    """Parse a human duration into seconds (argparse `type` helper).
+
+    Accepts a bare number (seconds) or unit forms: "1h", "300m", "7200s", and
+    combinations such as "1h30m5s". Units may repeat or appear in any order;
+    anything else raises ValueError so argparse reports it cleanly.
+    """
+    s = str(text).strip().lower()
+    if not s:
+        raise ValueError("empty duration")
+    try:
+        return float(s)                       # bare number -> seconds
+    except ValueError:
+        pass
+    total, pos = 0.0, 0
+    for m in _DURATION_TOKEN.finditer(s):
+        if m.start() != pos:
+            raise ValueError("cannot parse duration %r (unexpected %r)"
+                             % (text, s[pos:m.start()]))
+        total += float(m.group(1)) * _DURATION_UNITS[m.group(2)]
+        pos = m.end()
+    if pos != len(s) or pos == 0:
+        raise ValueError("cannot parse duration %r: expected e.g. '90', '300s', "
+                         "'20m', '1h' or '1h30m5s'" % text)
+    return total
+
+
+def format_duration(sec):
+    """Render seconds compactly (e.g. 5415 -> '1h30m15s')."""
+    total = int(round(float(sec or 0)))
+    if total <= 0:
+        return "0s"
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    out = "%dh" % h if h else ""
+    out += "%dm" % m if m else ""
+    if s or not out:
+        out += "%ds" % s
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -249,7 +298,7 @@ def _record(results, endpoint, **fields):
     return rec
 
 
-def watch_one(session, video, results, args, first_cursor=None):
+def watch_one(session, video, results, args, first_cursor=None, deadline=None):
     mid = video["mid"]
     oid = video["oid"]
     duration = video["duration"]
@@ -272,6 +321,7 @@ def watch_one(session, video, results, args, first_cursor=None):
     streamers = [DashStreamer(session, u, lbl, args.chunk, args.max_bytes)
                  for lbl, u in dash_urls]
     play_time = utc8_from_ms(int(time.time() * 1000))
+    watch_start_ms = int(time.time() * 1000)   # for firstframe_time = Date.now()-startTime
 
     # ONE stable session id per watch: the browser keeps `sid` (h5playlog) and
     # `rid` (PC_real_read) byte-identical across every heartbeat of a single
@@ -292,56 +342,204 @@ def watch_one(session, video, results, args, first_cursor=None):
     # exposure beacons at page load, before any playback beacon. Without them the
     # server has no organic-view anchor and the play/read is never credited.
     log.info("  [burst] action(4288 profile) + action(7165 video)")
-    _post_action_step(session, "4288", "20000366",
-                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID), results,
-                     first_cursor=first_cursor)
-    _post_action_step(session, "7165", "20000393",
-                     "vuid:%s|welfare:0" % AUTHOR_UID, results,
-                     first_cursor=first_cursor)
-    # CHANNEL 6 (RUM): one page-load transaction at session start (the browser's
-    # first rum event), for client-session fidelity.
-    _post_rum_step(session,
-                   [_rum_transaction("page-load", "/u/:id", 1500)],
-                   results, label="page-load")
-    log.info("  [burst] report(pt=0,sec=0) + playstatistics + h5playlog(start)")
-    _post_report_step(session, mid, oid, duration, "0", 0, results,
-                      first_cursor=first_cursor)
-    _post_playstatistics_step(session, mid, media_id, results,
-                              actionlog_uuid=video.get("actionlog_uuid"),
-                              first_cursor=first_cursor)
-    _post_h5playlog_step(session, mid, oid, duration, "0", 0, play_time, False,
-                         results, sid=sid, first_cursor=first_cursor)
+    rum_tx = []          # http-request transactions queued for the first RUM flush
 
-    # ---- sequence of progress heartbeats, interleaved with DASH byte fetch ----
-    seq = build_sequence(duration, args.cadence)
-    # seq[0] already covered by the burst (pt=0, sec=0); iterate the rest.
-    for i, (play_type, sec) in enumerate(seq[1:], start=1):
-        # download one chunk from EACH DASH stream (video + audio) this tick
-        for st in streamers:
-            st.next_chunk()
-        time.sleep(args.delay)
-        is_last = (i == len(seq) - 1)
-        _post_report_step(session, mid, oid, duration, play_type, sec, results)
-        _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
-                             play_time, is_last, results, sid=sid)
-        _post_read_step(session, mid, int(min(sec, duration) * 1000), results,
-                        rid=rid, first_cursor=first_cursor)
-        # CHANNEL 6 (RUM): one http-request transaction per heartbeat (summarizing
-        # this tick's beacon round), mirroring the browser's per-XHR rum sends.
-        _post_rum_step(session,
-                       [_rum_transaction("http-request", "watch heartbeat %d" % i,
-                                         int((args.delay or 1) * 1000) or 50,
-                                         outcome="success")],
-                       results, label="hb%d" % i)
-        log.info("  [hb %d] sec=%d (%d/%d chunks fetched)", i, sec,
-                 sum(s.fetched for s in streamers),
-                 sum(s.total or 0 for s in streamers))
+    def _timed(name, fn):
+        t0 = time.time()
+        out = fn()
+        rum_tx.append(_rum_transaction("http-request", name,
+                                       (time.time() - t0) * 1000.0))
+        return out
+
+    _timed("GET /ajax/log/action",
+           lambda: _post_action_step(session, "4288", "20000366",
+                                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID),
+                                     results, first_cursor=first_cursor))
+    _timed("GET /ajax/log/action",
+           lambda: _post_action_step(session, "7165", "20000393",
+                                     "vuid:%s|welfare:0" % AUTHOR_UID, results,
+                                     first_cursor=first_cursor))
+    log.info("  [burst] report(pt=0,sec=0) + playstatistics + h5playlog(start)")
+    nxt_delay = _timed("POST /multimedia.../play_history/report.json",
+                       lambda: _post_report_step(session, mid, oid, duration, "0", 0,
+                                                 results, first_cursor=first_cursor))
+    _timed("GET /aj/video/playstatistics",
+           lambda: _post_playstatistics_step(session, mid, media_id, results,
+                                             actionlog_uuid=video.get("actionlog_uuid"),
+                                             first_cursor=first_cursor))
+    _timed("POST /ajax/log/h5playlog",
+           lambda: _post_h5playlog_step(session, mid, oid, duration, "0", 0,
+                                        play_time, False, results, sid=sid,
+                                        first_cursor=first_cursor))
+    # CHANNEL 6 (RUM): the Elastic APM agent flushes its queue every 500ms
+    # (bundle #234185), so the first intake POST carries the page-load transaction
+    # PLUS one http-request transaction for every XHR fired so far -- not just a
+    # lone page-load event.
+    _post_rum_step(session,
+                   [_rum_transaction("page-load", "/u/:id", 1500)] + rum_tx,
+                   results, label="page-load")
+
+    # ---- event-driven virtual player (mirrors weibo-pro-next PlayLog + HistoryReport) ----
+    # The browser does NOT fire beacons on a fixed sleep() cadence. It runs a
+    # videojs event loop: a synthetic `timeupdate` tick (~250ms, like the bundle's
+    # setInterval(fn,250)) advances currentTime; each tick accumulates VALID play
+    # time (increment < 0.6s only) into two independent buffers.
+    # JS-side rationale (timeupdate semantics, native vs manual mode, why the
+    # threshold is 0.6s, --speed vs the bundle's real playbackRate, and how this
+    # loop maps onto a JS timeupdate callback):
+    #   doc/weibo_pro_next_playback_analysis.md -> section 6
+    #   * h5playlog (PlayLog):       fires when its buffer >= 30s  (HARD-CODED in source)
+    #   * report.json (HistoryReport): fires when its buffer >= next_report_delay_seconds
+    #     (SERVER-DRIVEN; seeded by the burst's report.json response, then re-read from
+    #     every report.json response).
+    # Each h5playlog sends valid_play_duration = the DELTA since its last send
+    # (PlayLog._afterSend resets it to 0), NOT the cumulative position. This is the
+    # field the old delay-driven loop got wrong (it reported the absolute position).
+    _drive_event_player(session, mid, oid, duration, results, args,
+                        sid=sid, first_cursor=first_cursor, streamers=streamers,
+                        rid=rid, watch_start_ms=watch_start_ms, next_delay=nxt_delay,
+                        deadline=deadline)
+    return True
+
+
+def _drive_event_player(session, mid, oid, duration, results, args,
+                        sid=None, first_cursor=None, streamers=None, rid=None,
+                        watch_start_ms=None, next_delay=None, deadline=None):
+    """Event-driven virtual player loop (extracted from watch_one for testability).
+
+    Mirrors the browser's playback event loop: advance a virtual currentTime in
+    fixed TICK-second timeupdate ticks (real wall-clock paced by TICK/speed), and
+    fire each beacon per its OWN JS-derived trigger. See module docstring section 5.
+    """
+    TICK = 0.25                        # virtual seconds per timeupdate tick
+    READ_INTERVAL_S = 5.0              # PC_real_read: exposure service interval (5e3)
+    RUM_FLUSH_MS = 500                 # Elastic APM agent flushInterval (bundle #234185)
+    cadence = float(args.cadence or 30)
+    delay = float(args.delay or 30)
+    speed = float(getattr(args, "speed", 0) or 0) or (cadence / max(delay, 0.1))
+    if speed <= 0:
+        speed = 1.0
+    real_sleep = TICK / speed         # faithful 1x when speed == 1
+    duration_s = float(duration or 0)
+    cur = 0.0                          # virtual currentTime (s)
+    last = 0.0
+    hl_valid = 0.0                     # h5playlog valid-play accumulator
+    hl_buf = 0.0                       # h5playlog 30s trigger
+    ps_valid = 0.0                     # report.json valid-play accumulator
+    ps_buf = 0.0                       # report.json next_report_delay trigger
+    rd_buf = 0.0                       # PC_real_read dwell accumulator (own 5s timer)
+    next_delay = (int(next_delay) if (next_delay and int(next_delay) > 0) else 30)
+    firstframe_time_ms = max(1, int(time.time() * 1000)
+                             - (watch_start_ms or int(time.time() * 1000)))
+    ended = False
+    stopped_early = False              # True when the wall-clock budget cut us short
+
+    # RUM (Elastic APM agent, bundle #234185 `flushInterval: 500`): the browser opens
+    # one page-load transaction and one http-request transaction per XHR, then POSTs
+    # whatever has queued up every 500ms. Mirror it with a queue + timed flush.
+    rum_q = []
+    rum_last = time.time()
+
+    def rum_note(name, dur_ms, outcome="success"):
+        rum_q.append(_rum_transaction("http-request", name, dur_ms, outcome=outcome))
+
+    def rum_flush(force=False):
+        nonlocal rum_last
+        now = time.time()
+        if rum_q and (force or (now - rum_last) * 1000.0 >= RUM_FLUSH_MS):
+            _post_rum_step(session, list(rum_q), results, label="http-request")
+            del rum_q[:]
+            rum_last = now
+
+    def fire_h5play(is_last, quit=None):
+        pt = utc8_from_ms(int(time.time() * 1000))
+        vd = int(round(hl_valid * 1000))             # DELTA since previous h5playlog
+        t0 = time.time()
+        _post_h5playlog_step(session, mid, oid, duration, "1", cur, pt,
+                             is_last, results, sid=sid, first_cursor=first_cursor,
+                             valid_play_duration_ms=vd, firstframe_time_ms=firstframe_time_ms,
+                             quit_status=quit)
+        rum_note("POST /ajax/log/h5playlog", (time.time() - t0) * 1000.0)
+
+    def fire_read():
+        # PC_real_read: the exposure service posts the dwell DELTA every
+        # options.interval (default 5e3 = 5s; bundle #231174/#231188) and resets its
+        # timers after each report, so read_duration is "since the last report",
+        # NOT a cumulative position (it used to be sent as `playduration`).
+        rd = int(round(rd_buf * 1000))
+        t0 = time.time()
+        _post_read_step(session, mid, rd, results, rid=rid, first_cursor=first_cursor)
+        rum_note("POST /ajax/log/read", (time.time() - t0) * 1000.0)
+
+    def fire_report(play_type):
+        sec = int(min(cur, duration_s))
+        t0 = time.time()
+        out = _post_report_step(session, mid, oid, duration, str(play_type), sec,
+                                results, first_cursor=first_cursor)
+        rum_note("POST /multimedia.../play_history/report.json",
+                 (time.time() - t0) * 1000.0)
+        return out
+
+    # Deadline-paced wall clock: sleep to the next tick boundary instead of taking a
+    # fixed nap, so blocking IO (beacon POSTs, DASH chunks) does not stretch the real
+    # tick period -- the JS loop keeps ticking at 250ms while XHRs run in parallel.
+    next_tick = time.perf_counter() + real_sleep
+    while cur < duration_s and not ended:
+        cur = min(cur + TICK, duration_s)
+        c = cur - last
+        u = c if (0 < c < 0.6) else 0.0             # valid-play tick filter (<0.6s)
+        last = cur
+        hl_valid += u
+        hl_buf += u
+        ps_valid += u
+        ps_buf += u
+        # read dwell: NOT gated by the <0.6 valid-play filter -- the JS exposure
+        # service only requires the card to stay visible (IntersectionObserver >= .3).
+        rd_buf += TICK
+        # DASH: fetch a chunk per tick (no-op once the file is fully fetched)
+        for st in (streamers or []):
+            if not st.done:
+                st.next_chunk()
+        # h5playlog: every >=30s of valid play (hardcoded, like PlayLog.timeBuffer>=30)
+        if hl_buf >= 30 and cur < duration_s and not ended:
+            fire_h5play(False)
+            hl_valid = 0.0
+            hl_buf = 0.0
+        # report.json: every >=next_report_delay_seconds of valid play (server-driven)
+        if ps_buf >= next_delay and next_delay and next_delay > 0 and cur < duration_s and not ended:
+            nd = fire_report(1)
+            if nd and int(nd) > 0:
+                next_delay = int(nd)
+            ps_valid = 0.0
+            ps_buf = 0.0
+        # read: its OWN 5s timer (it used to piggy-back h5playlog's 30s heartbeat)
+        if rd_buf >= READ_INTERVAL_S and cur < duration_s and not ended:
+            fire_read()
+            rd_buf = 0.0
+        rum_flush()
+        # wall-clock budget: stop the video as soon as the real-time budget is gone
+        if deadline is not None and time.time() >= deadline:
+            stopped_early = True
+            break
+        if real_sleep > 0:
+            now = time.perf_counter()
+            remaining = next_tick - now
+            if remaining > 0:
+                time.sleep(remaining)
+            next_tick = max(now, next_tick) + real_sleep
+    # 'ended' (PlayLog.dispose): final heartbeat. quit_status is 'complete' when the
+    # video really finished, 'not_complete' when the wall-clock budget cut it short.
+    fire_h5play(True, quit=("not_complete" if stopped_early else "complete"))
+    fire_read()                        # final dwell report (like handleBeforeUnload)
+    fire_report(1)
+    rum_flush(force=True)
+    log.info("  [virtual player] ended cur=%.1fs (speed=%.1fx, next_report_delay=%ss)"
+             % (cur, speed, next_delay))
 
     # finish downloading any remainder (so the full file is fetched like a real watch)
-    for st in streamers:
+    for st in (streamers or []):
         st.drain()
         log.info("  [dash][%s] done: fetched=%d total=%s" % (st.label, st.fetched, st.total))
-    return True
 
 
 # --------------------------------------------------------------------------
@@ -392,26 +590,41 @@ def main():
     ap.add_argument("--chunk", type=int, default=524288,
                     help="bytes per Range GET (206 segment size)")
     ap.add_argument("--cadence", type=float, default=30,
-                    help="reported seconds between heartbeats")
+                    help="DEPRECATED: no longer drives any beacon cadence "
+                         "(h5playlog is hard-coded 30s of valid play per source, "
+                         "report.json is server-driven). Only used to derive --speed "
+                         "when --speed is unset. Use --speed instead.")
     ap.add_argument("--delay", type=float, default=30,
-                    help="REAL seconds between heartbeats (30 = browser cadence)")
+                    help="DEPRECATED: no longer paces anything (scheduling is "
+                         "event-driven). Only used to derive --speed when --speed is "
+                         "unset (speed = cadence/delay). Use --speed instead.")
+    ap.add_argument("--speed", type=float, default=0,
+                    help="virtual-playback speed multiplier (1.0 = faithful 1x; "
+                         ">1 fast-forwards for tests). Overrides --delay/--cadence.")
     ap.add_argument("--rounds", type=int, default=1,
                     help="repeat the whole watch N times")
     ap.add_argument("--max-dur", type=float, default=0,
                     help="if set, only watch videos shorter than this (for --index pick)")
+    ap.add_argument("--max-wall-time", dest="max_wall_time", type=parse_duration,
+                    default=0,
+                    help="REAL wall-clock limit on how long this run may take; the "
+                         "process stops when it is used up. Accepts '90' (seconds when "
+                         "bare), '300s', '20m', '1h' or a combination such as "
+                         "'1h30m5s' (0 = no limit). The current video stops at once "
+                         "(final heartbeat with quit_status='not_complete') and no "
+                         "further video is played; the audit and summary still run.")
     ap.add_argument("--max-bytes", type=int, default=0,
                     help="cap DASH download per url (0 = whole file); used by --smoke")
     ap.add_argument("--with-aggregate", action="store_true",
                     help="snapshot LAGGED creator-center aggregates (pre + post)")
     ap.add_argument("--smoke", action="store_true",
-                    help="short self-test: delay=1, cadence=10, max-bytes=2MB, rounds=1")
+                    help="short self-test: speed=10, max-bytes=2MB, rounds=1")
     ap.add_argument("--dry-run", action="store_true",
                     help="only print the plan, send nothing")
     args = ap.parse_args()
 
     if args.smoke:
-        args.delay = 1.0
-        args.cadence = 10
+        args.speed = 10.0          # fast-forward 10x (replaces old delay=1/cadence=10)
         args.max_bytes = 2_000_000
         args.rounds = 1
 
@@ -458,15 +671,23 @@ def run_watch(session, window, args, results, t0):
     want_mids = [v["mid"] for v in window]
 
     if args.dry_run:
-        per_round = 0.0
-        for v in window:
-            seq = build_sequence(v.get("duration") or 0, args.cadence)
-            per_round += len(seq) * args.delay
+        # Event-driven scheduling: the real wall time is the total virtual duration
+        # divided by the speed multiplier (--delay/--cadence no longer pace anything).
+        sp = float(getattr(args, "speed", 0) or 0) or (
+            float(args.cadence or 30) / max(float(args.delay or 30), 0.1))
+        if sp <= 0:
+            sp = 1.0
+        per_round = sum(float(v.get("duration") or 0) for v in window) / sp
         est = per_round * args.rounds
-        log.info("DRY-RUN: %d videos x %d rounds; ~%.0fs wall/round (cadence=%.0fs, "
-                 "delay=%.1fs). no requests sent." % (len(window), args.rounds,
-                 per_round, args.cadence, args.delay))
+        log.info("DRY-RUN: %d videos x %d rounds; ~%.0fs wall/round (speed=%.1fx, "
+                 "event-driven). no requests sent." % (len(window), args.rounds,
+                 per_round, sp))
         log.info("  est TOTAL wall ~%.0fs (%.1f min)" % (est, est / 60.0))
+        budget = float(getattr(args, "max_wall_time", 0) or 0)
+        if budget > 0:
+            log.info("  --max-wall-time %s is set: the run stops there and skips "
+                     "the rest (%s would be needed)." % (format_duration(budget),
+                                                         format_duration(est)))
         return {"dry_run": True, "videos": len(window), "rounds": args.rounds}
 
     if args.with_aggregate:
@@ -485,9 +706,25 @@ def run_watch(session, window, args, results, t0):
 
     ok = fail = 0
     watched_seconds = 0  # total duration of the videos actually watched
+    # REAL wall-clock limit (--max-wall-time). 0 = unlimited. Once exhausted the
+    # current video stops mid-way (not_complete) and no further video is played;
+    # the audit + summary below still run.
+    budget = float(getattr(args, "max_wall_time", 0) or 0)
+    deadline = (t0 + budget) if budget > 0 else None
+    if deadline:
+        log.info("=== wall-clock budget: %s (%.0fs) ===",
+                 format_duration(budget), budget)
+    stopped = False
     for rnd in range(1, args.rounds + 1):
+        if stopped:
+            break
         log.info("=== round %d/%d ===", rnd, args.rounds)
         for vi, v in enumerate(window, 1):
+            if deadline and time.time() >= deadline:
+                log.info("=== budget reached: stop before video %d/%d (mid=%s) ===",
+                         vi, len(window), v["mid"])
+                stopped = True
+                break
             base = wmap.get(v["mid"]) or {}
             mi = get_media_via_statuses(session, v["mid"])   # fresh signed DASH URL
             if not mi:
@@ -507,7 +744,8 @@ def run_watch(session, window, args, results, t0):
             log.info("=== [WATCH] round %d/%d  video %d/%d  mid=%s  title=%s ===",
                      rnd, args.rounds, vi, len(window), v["mid"],
                      (video["title"] or "")[:80])
-            g = watch_one(session, video, results, args, first_cursor)
+            g = watch_one(session, video, results, args, first_cursor,
+                          deadline=deadline)
             if g is True:
                 ok += 1
                 watched_seconds += int(video["duration"] or 0)
@@ -540,6 +778,11 @@ def run_watch(session, window, args, results, t0):
                 log.info("  %-9s %-15s : %s -> %s  (delta %s)", period, k, pv, pp, delta)
 
     elapsed = time.time() - t0
+    if stopped:
+        planned = len(window) * args.rounds
+        log.info("=== STOPPED EARLY: wall-clock budget %s exhausted; %d of %d "
+                 "planned video-plays skipped ===", format_duration(budget),
+                 planned - (ok + fail), planned)
     log.info("=== DONE videos=%d rounds=%d ok=%d fail=%d elapsed=%.1fs ===",
              len(window), args.rounds, ok, fail, elapsed)
     log.info("=== TIMING script_elapsed=%.1fs (%.1f min) | watched_video=%.0fs (%.1f min) ===",
