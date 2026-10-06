@@ -104,7 +104,7 @@ def save(uid, data):
         if sub in data:
             merged[sub] = {**(merged.get(sub) or {}), **data[sub]}
     merged['uid'] = uid
-    with open(profile_path(uid), 'w', encoding='utf-8') as f:
+    with open(profile_path(uid), 'w', encoding='utf-8', newline='\n') as f:
         json.dump(merged, f, ensure_ascii=False, indent=2)
         f.write('\n')
     return merged

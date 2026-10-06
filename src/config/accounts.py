@@ -99,7 +99,7 @@ def set_uid_for_alias(alias, uid):
             if acc.get('uid') == uid:
                 return False
             acc['uid'] = uid
-            with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            with open(CONFIG_PATH, 'w', encoding='utf-8', newline='\n') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
                 f.write('\n')
             return True
