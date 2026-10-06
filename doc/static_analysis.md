@@ -114,4 +114,4 @@ and a good fallback crawl channel for `relations_sync` / `following_deep`.
 - **Throttle parity:** `profile/info` is throttled with HTTP 414; writes may throttle too —
   reuse `http_engine`'s recovery-cooldown global.
 - **Safety:** all B1–B6 write to the live account. Never auto-run without an explicit
-  user flag and a dry-run preview; keep PII/`uid` in `config/experiment.local.json` only.
+  user flag and a dry-run preview; keep PII/`uid` in `config/accounts.local.json` only.

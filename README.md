@@ -154,7 +154,7 @@ Only templates are committed; copy and fill in your own values.
 | Template | Real file (git-ignored) | Purpose |
 |---|---|---|
 | `config/chat.ini.example` | `config/chat.ini` | UID, group GID and optional proxy for `chat.py` |
-| `config/experiment.local.json.example` | `config/experiment.local.json` | `author_uid` / `viewer_uid` plus the `author_label` / `viewer_label` code names for the experiment scripts and automation runners |
+| `config/accounts.local.json.example` | `config/accounts.local.json` | Account registry: an `accounts` list (`id`, `uid`, `alias`, `roles`) consumed by the experiment scripts and automation runners via `src/config/accounts.py`; mutable data such as `nickname` lives per uid in `src/data/profile/<uid>.json` |
 
 `src/config/verified_categories.json` **is** committed: it is the single source
 of truth for verification-type labels, tier mapping, the official/media

@@ -1,0 +1,23 @@
+{
+  "accounts": [
+    {
+      "id": "<uuid>",
+      "uid": "YOUR_AUTHOR_UID",
+      "alias": "author",
+      "roles": ["author"]
+    },
+    {
+      "id": "<uuid>",
+      "uid": "YOUR_VIEWER_UID",
+      "alias": "viewer",
+      "roles": ["viewer"]
+    },
+    {
+      "id": "<uuid>",
+      "uid": "",
+      "alias": "",
+      "roles": ["viewer"],
+      "_note": "Optional 3rd account. Fill in real uid/alias, then log in."
+    }
+  ]
+}

@@ -14,6 +14,10 @@ import requests
 
 import logging
 
+# Account registry: alias -> uid is owned by config/accounts.local.json (see
+# src/config/accounts.py); it replaces the retired cookies.labels.json side-file.
+from config.accounts import by_alias, set_uid_for_alias
+
 # Shared logging setup (config/logging.ini, relative to this file). Idempotent.
 from logutil import setup as _setup_logging
 _setup_logging()
@@ -39,23 +43,10 @@ def legacy_cookie_path():
     return os.path.join(COOKIE_DIR, 'cookies.weibo')
 
 
-# Label -> UID mapping so that `--user <label>` (a human-friendly alias chosen
-# at first login) can be resolved back to the real UID-named cookie file on
-# later runs, instead of forcing a fresh QR login every time.
-LABEL_MAP_PATH = os.path.join(COOKIE_DIR, 'cookies.labels.json')
-
-
-def _load_label_map():
-    try:
-        with open(LABEL_MAP_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-
-def _save_label_map(mapping):
-    with open(LABEL_MAP_PATH, 'w', encoding='utf-8', newline='\n') as f:
-        json.dump(mapping, f, ensure_ascii=False, indent=2)
+# (The retired `cookies.labels.json` side-file is replaced by the account
+#  registry imported above -- see src/config/accounts.py. A successful login
+#  writes the discovered UID back into that registry, so a later
+#  `--user <alias>` reuses the saved session instead of forcing a new scan.)
 
 WEIBO_HOME_URL = 'https://weibo.com'
 
@@ -154,9 +145,9 @@ class Auth(object):
             return False
         if args_user:
             self.label = args_user
-            # If this label was used before, resolve it to the real UID so we
-            # reuse the existing cookie file instead of forcing a fresh login.
-            mapped_uid = _load_label_map().get(args_user)
+            # If this alias already carries a UID in the registry, resolve it so
+            # we reuse the existing cookie file instead of forcing a fresh login.
+            mapped_uid = (by_alias(args_user) or {}).get('uid')
             if mapped_uid and os.path.exists(user_cookie_path(mapped_uid)):
                 self.uid = mapped_uid
                 logging.info('Resolved label "%s" -> UID %s (saved session).'
@@ -534,11 +525,13 @@ class Auth(object):
         logging.info('Saving cookies for "%s" to disk.' % identity)
         # Remember label -> UID so a later `--user <label>` reuses this session.
         if self.uid and self.label and self.label != self.uid:
-            mapping = _load_label_map()
-            if mapping.get(self.label) != self.uid:
-                mapping[self.label] = self.uid
-                _save_label_map(mapping)
+            if set_uid_for_alias(self.label, self.uid):
                 logging.info('Mapped label "%s" -> UID %s.' % (self.label, self.uid))
+            elif not by_alias(self.label):
+                logging.warning('Alias "%s" is not in the account registry '
+                                '(config/accounts.local.json): the discovered UID '
+                                'was not persisted, so this alias cannot reuse the '
+                                'session on the next run.' % self.label)
         cookies_data = []
         for cookie in self.session.cookies:
             cookies_data.append({
@@ -572,7 +565,40 @@ class Auth(object):
             debug_lines.append(f'  {c.name}={c.value}@{c.domain}')
         logging.debug('\n'.join(debug_lines))
 
+        # A fresh session was just (re)established for this account -- either via
+        # QR login or via silent SSO renew. Refresh its profile cache from the
+        # Weibo API now, while we hold a valid authenticated session for a known
+        # uid. Cheap, and keeps profile/info + profile/detail current.
+        self._refresh_profile()
+
+    def _refresh_profile(self):
+        """Best-effort: refresh this account's profile cache after a session is
+        (re)established. No-op when the uid is unknown or the API call fails; any
+        failure is logged and never blocks the login/renew flow.
+        """
+        if not self.uid:
+            return
+        try:
+            from profiles import refresh as _refresh_profile_data
+        except Exception as e:  # profiles is always importable in this project
+            logging.warning('profile refresh skipped (import failed): %s', e)
+            return
+        prof = _refresh_profile_data(self.uid, session=self.session, alias=self.label)
+        if prof is None:
+            logging.warning('profile refresh failed for uid=%s (skipped).', self.uid)
+        else:
+            logging.info('profile refreshed for uid=%s (source=%s).',
+                         self.uid, (prof.get('local') or {}).get('source'))
+
     def login(self, max_rounds=5):
+        identity = 'alias=%s%s' % (
+            self.label,
+            (' uid=%s' % self.uid) if self.uid else '')
+        logging.warning('>>> QR LOGIN REQUIRED — you are about to log in as: %s', identity)
+        print('\n' + '=' * 64)
+        print('  扫码登录目标账号：%s' % identity)
+        print('  请用该账号对应的微博 App 扫码，并在手机上点击「确认」。')
+        print('=' * 64 + '\n')
         logging.info('Start logging in...')
         self.visitor_session_gen()
         self.crossdomain_visitor_gen()
@@ -581,7 +607,7 @@ class Auth(object):
         # must run on the main thread), auto-populating, auto-refreshing on
         # expiry, and auto-closing on success. This blocks until login finishes
         # or the retry cap is exceeded.
-        win = _QRWindow()
+        win = _QRWindow(alias=self.label, uid=self.uid)
         win.run(self, max_rounds=max_rounds)
 
     def check_qr_code_scan_v1(self, qr_id):
@@ -832,6 +858,12 @@ class Auth(object):
         (ok:-100 / redirect to login.php), so an unattended run keeps going
         instead of silently producing empty caches.
         """
+        if not force and not self.session.cookies:
+            # Load any saved cookies from disk first. Callers used to have to call
+            # self.load() themselves; doing it here means a valid on-disk session
+            # is never mistaken for "logged out" and forced through a QR re-scan
+            # (ensure_session is the single canonical recovery path).
+            self.load()
         if not force and self.test_login():
             return True
         if allow_renew:
@@ -1046,7 +1078,7 @@ class _QRWindow:
     is unavailable (e.g. a headless environment).
     """
 
-    def __init__(self, title='Weibo QR Login'):
+    def __init__(self, title='微博扫码登录', alias=None, uid=None):
         try:
             import tkinter as tk
             from PIL import ImageTk
@@ -1059,11 +1091,37 @@ class _QRWindow:
         self._title = title
         self._root = tk.Tk()
         self._root.withdraw()  # hide until the QR image is ready
-        self._root.title(title)
+        self._root.title(self._title)
         self._root.resizable(False, False)
+        # Show the target account INSIDE the window (the OS title bar gets
+        # clipped when the window is narrow, so the account was hard to read).
+        who_line = self._who_text(alias, uid)
+        header_font = ('Microsoft YaHei', 13, 'bold')
+        hint_font = ('Microsoft YaHei', 10)
+        self._header = tk.Label(self._root, text='微博扫码登录',
+                                font=header_font, fg='#1a1a1a')
+        self._header.pack(padx=24, pady=(16, 4))
+        self._who = tk.Label(self._root, text=who_line, font=header_font,
+                             fg='#c0392b', wraplength=520, justify='center')
+        self._who.pack(padx=24, pady=(0, 4))
+        self._hint = tk.Label(self._root,
+                              text='请用手机微博 App 扫码，并在手机上点「确认登录」',
+                              font=hint_font, fg='#555555')
+        self._hint.pack(padx=24, pady=(0, 12))
         self._label = tk.Label(self._root)
-        self._label.pack(padx=20, pady=20)
+        self._label.pack(padx=24, pady=(0, 24))
         self._photo = None
+        self._shown = False  # tracks first deiconify
+
+    @staticmethod
+    def _who_text(alias, uid):
+        if alias and uid and alias != uid:
+            return '账号：%s（uid=%s）' % (alias, uid)
+        if uid and not alias:
+            return '账号：uid=%s' % uid
+        if alias and not uid:
+            return '账号：%s（扫码后获取 uid）' % alias
+        return '账号：default'
         self._auth = None
         self._qr_id = None
         self._round = 0
@@ -1103,6 +1161,18 @@ class _QRWindow:
             self._shown = True
         self._root.lift()
         self._root.update_idletasks()
+        self._center()
+
+    def _center(self):
+        """Center the window on the primary screen (recomputed every refresh)."""
+        self._root.update_idletasks()
+        w = self._root.winfo_width()
+        h = self._root.winfo_height()
+        sw = self._root.winfo_screenwidth()
+        sh = self._root.winfo_screenheight()
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2)
+        self._root.geometry('+%d+%d' % (x, y))
 
     def _poll(self):
         check = self._auth.check_qr_code_scan(self._qr_id)
@@ -1131,8 +1201,11 @@ class _QRWindow:
                                'tmp', 'qr', 'weibo_qr.png')
             os.makedirs(os.path.dirname(path), exist_ok=True)
             img.save(path)
+            identity = 'alias=%s%s' % (
+                auth.label,
+                (' uid=%s' % auth.uid) if auth.uid else '')
             logging.info(f'QR round {self._round}/{max_rounds} (headless): '
-                         f'open {path} to scan.')
+                         f'open {path} to scan — logging in as {identity}.')
             try:
                 os.startfile(path)
             except Exception:

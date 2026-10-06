@@ -107,4 +107,4 @@ creatorCardClick:6842`，外加 `act_code:6306` 的访问上报（`index-D53O_Np
 - **限流一致：** `profile/info` 被 HTTP 414 限流；写入端也可能限流——复用 `http_engine`
   的冷却恢复全局变量。
 - **安全：** B1–B6 全部写入真实账号。未经显式用户标志 + 干跑预览，绝不自动执行；PII/`uid`
-  只放在 `config/experiment.local.json`。
+  只放在 `config/accounts.local.json`。

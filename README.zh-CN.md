@@ -148,7 +148,7 @@ src/
 | 模板 | 实际文件（已 git 忽略） | 用途 |
 |---|---|---|
 | `config/chat.ini.example` | `config/chat.ini` | `chat.py` 用的 UID、群 GID 与可选代理 |
-| `config/experiment.local.json.example` | `config/experiment.local.json` | 实验脚本与自动化 runner 用的 `author_uid` / `viewer_uid` 及代号 `author_label` / `viewer_label` |
+| `config/accounts.local.json.example` | `config/accounts.local.json` | 账号登记表：含 `accounts` 列表（`id`、`uid`、`alias`、`roles`），由实验脚本与自动化 runner 经 `src/config/accounts.py` 读取；`nickname` 等可变资料按 uid 存放在 `src/data/profile/<uid>.json` |
 
 `src/config/verified_categories.json` **是**提交的：它是认证类型标签、档位映射、
 官方/官媒排除名单以及 `profile_visit.skip_organization` 策略的唯一事实来源，供
