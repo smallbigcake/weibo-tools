@@ -14,11 +14,7 @@ Run:
 import os as _os
 import json as _json
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
+
 import argparse
 import json
 import os
@@ -28,6 +24,7 @@ from urllib.parse import urlencode
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, SRC_DIR)
 sys.path.insert(0, os.path.join(SRC_DIR, 'experiment', 'fetch'))
+from config.accounts import AUTHOR_UID  # noqa: E402
 from auth import Auth
 
 BASE = "https://me.weibo.com/api/proxy/native/datavidnew"
@@ -42,7 +39,6 @@ def fetch(a, mid, oid, tab):
     except Exception:
         return {"_raw": r.text[:2000], "_status": r.status_code}
 
-
 def _walk(obj, path, out, keys=("play", "count", "duration", "dura")):
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -56,7 +52,6 @@ def _walk(obj, path, out, keys=("play", "count", "duration", "dura")):
     elif isinstance(obj, list):
         for i, v in enumerate(obj[:3]):
             _walk(v, path + ["[%d]" % i], out)
-
 
 def main():
     ap = argparse.ArgumentParser()
@@ -75,7 +70,6 @@ def main():
             print("  " + line)
         print("  -- raw head --")
         print("  " + json.dumps(data, ensure_ascii=False)[:3000].replace("\n", " "))
-
 
 if __name__ == "__main__":
     main()

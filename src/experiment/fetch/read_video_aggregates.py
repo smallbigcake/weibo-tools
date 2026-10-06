@@ -33,12 +33,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -47,6 +42,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
@@ -65,7 +61,6 @@ METRIC_CN2EN = {
 }
 METRIC_EN2CN = {v: k for k, v in METRIC_CN2EN.items()}
 
-
 def find_select_subitems(obj):
     if isinstance(obj, dict):
         if "select_subitems" in obj:
@@ -81,12 +76,10 @@ def find_select_subitems(obj):
                 return r
     return None
 
-
 def _get(a, url, params):
     return a.session.get(url, params=params,
                          headers={"User-Agent": UA, "Referer": "https://me.weibo.com/"},
                          timeout=20000).json()
-
 
 def fetch_yesterday(a):
     """Yesterday core metrics (6 of them) each with a vs-prev-day delta.
@@ -109,7 +102,6 @@ def fetch_yesterday(a):
             "name_cn": cn,
         }
     return out
-
 
 def fetch_7_30(a):
     """Last-7 / last-30 day aggregates. API keys are already English.
@@ -134,7 +126,6 @@ def fetch_7_30(a):
         out[label] = metrics
     return out
 
-
 def fetch_yesterday_top5(a):
     """Yesterday top-5 videos by play count (from dt_vid_playpercent)."""
     d = _get(a, "https://me.weibo.com/api/proxy/native/datavid_item",
@@ -156,7 +147,6 @@ def fetch_yesterday_top5(a):
                     "scheme": v.get("scheme"),
                 })
     return items
-
 
 def main():
     a = Auth()
@@ -214,7 +204,6 @@ def main():
         print("    #%s play=%s mid=%s %s" % (
             v["rank"], v["play_yesterday"], v["mid"], (v["title"] or "")[:40]))
     print("\nsaved ->", path)
-
 
 if __name__ == "__main__":
     main()

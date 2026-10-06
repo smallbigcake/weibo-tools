@@ -31,12 +31,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -45,6 +40,7 @@ from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
@@ -54,9 +50,7 @@ OUT = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_vid
 PAGE_DELAY = 1.0
 END_CURSORS = {"", "0", "-1"}
 
-
 from datetime_util import utc8_from_ms  # noqa: E402  (server-ms -> Beijing display)
-
 
 def fetch_page(a, cursor, tries=4):
     for i in range(tries):
@@ -70,7 +64,6 @@ def fetch_page(a, cursor, tries=4):
             return r, None
         time.sleep(3 * (i + 1))  # backoff 3s, 6s, 9s...
     return r, "HTTP %s: %s" % (r.status_code, r.text[:200])
-
 
 def main():
     incremental = "--incremental" in sys.argv[1:]
@@ -165,7 +158,6 @@ def main():
     if overload is not None:
         print("api video_overload_count:", overload)
     print("saved ->", OUT)
-
 
 if __name__ == "__main__":
     main()

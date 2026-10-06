@@ -14,22 +14,17 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
 from datetime_util import utc8_from_ms  # noqa: E402  (server-ms -> Beijing display)
-
 
 def main():
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 20
@@ -75,7 +70,6 @@ def main():
     with open(out_path, "w", encoding="utf-8", newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("\nSaved ->", out_path)
-
 
 if __name__ == "__main__":
     main()

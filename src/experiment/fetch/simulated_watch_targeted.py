@@ -30,16 +30,11 @@ import time
 import argparse
 
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
 
 _SRC_ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
 sys.path.insert(0, _SRC_ROOT)
 sys.path.insert(0, _os.path.join(_SRC_ROOT, 'experiment', 'fetch'))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from auth import Auth  # noqa: E402  (validates the viewer session at import)
 from logutil import setup as _setup_logging, share_handler, utc_formatter  # noqa: E402
@@ -55,14 +50,12 @@ from dash_streamer import log as _dash_log  # noqa: E402
 SRC_DIR = _SRC_ROOT
 DEFAULT_JSON = _os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
 
-
 def _title_has_default(titles):
     """True if any title entry is flagged default (default:true OR type:"default")."""
     for t in (titles or []):
         if t.get("default") is True or t.get("type") == "default":
             return True
     return False
-
 
 def load_filtered_videos(path, days, include_default_title, include_playlisted):
     """Return (window, stats) where `window` is the list of video dicts that pass:
@@ -99,7 +92,6 @@ def load_filtered_videos(path, days, include_default_title, include_playlisted):
                     "duration": int(v.get("duration") or 0),
                     "title": title})
     return out, stats
-
 
 def main():
     ap = argparse.ArgumentParser(
@@ -175,7 +167,6 @@ def main():
         return run_watch(None, window, args, results, t0)
     sess = _viewer_session()
     return run_watch(sess, window, args, results, t0)
-
 
 if __name__ == "__main__":
     main()

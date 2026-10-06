@@ -31,11 +31,7 @@ import json
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
+
 import argparse
 import os
 import sys
@@ -45,13 +41,13 @@ from datetime import datetime, timezone
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, SRC_DIR)
 sys.path.insert(0, os.path.join(SRC_DIR, 'experiment', 'fetch'))
+from config.accounts import AUTHOR_UID  # noqa: E402
 from auth import Auth
 
 GETVIDEO_URL = "https://weibo.com/ajax/multimedia/getVideoList"
 from constants import BROWSER_USER_AGENT as UA
 CREATOR_REF = "https://weibo.com/creator"
 LOG_PATH = os.path.join(SRC_DIR, "data", "probe", "probe_verify_log.jsonl")
-
 
 def fetch_video_list(session, pages=8):
     """Return recent author videos [{mid, oid, duration, play_count}] via getVideoList."""
@@ -80,7 +76,6 @@ def fetch_video_list(session, pages=8):
         if not cursor or cursor == "0":
             break
     return out
-
 
 def main():
     ap = argparse.ArgumentParser(
@@ -118,7 +113,6 @@ def main():
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     print("  appended -> %s" % LOG_PATH)
     return rec
-
 
 if __name__ == "__main__":
     main()

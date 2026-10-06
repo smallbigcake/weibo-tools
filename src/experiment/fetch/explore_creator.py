@@ -11,18 +11,14 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT
@@ -34,7 +30,6 @@ KEYWORDS = ["播放时长", "完播", "play_duration", "playduration", "valid_pl
             "watch_time", "avg_play", "video_stat", "datacenter", "数据中心",
             "video_data", "play_time"]
 HITS = []
-
 
 def clean(c):
     out = {"name": c.get("name"), "value": c.get("value"),
@@ -49,7 +44,6 @@ def clean(c):
     elif isinstance(exp, str) and exp.isdigit():
         out["expires"] = float(exp)
     return out
-
 
 def dump_videotab():
     a = Auth()
@@ -71,7 +65,6 @@ def dump_videotab():
     print("[videotab] saved %s; first item keys: %s" % (path, keys))
     print("[videotab] statistics keys: %s" % stats_keys)
 
-
 def on_response(response):
     try:
         url = response.url
@@ -90,7 +83,6 @@ def on_response(response):
             HITS.append({"url": url, "len": len(body), "snippet": text[:500]})
     except Exception:
         pass
-
 
 def live_explore():
     cookies = [clean(c) for c in json.load(open(COOKIE_FILE, encoding="utf-8"))]
@@ -130,7 +122,6 @@ def live_explore():
     for h in HITS[:30]:
         print("\nURL:", h["url"])
         print("SNIP:", h["snippet"].replace("\n", " ")[:400])
-
 
 if __name__ == "__main__":
     dump_videotab()

@@ -1,3 +1,4 @@
+from config.accounts import AUTHOR_UID  # noqa: E402
 """Final attempt to locate the creator data-center '播放时长' read API.
 
 On weibo.com/creatorcenter (author): detect whether the page exposes
@@ -12,12 +13,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -27,7 +23,6 @@ EXP = os.path.dirname(os.path.abspath(__file__))
 COOKIE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                            "cookies.%s.weibo" % AUTHOR_UID)
 AJAX = []
-
 
 def clean(c):
     out = {"name": c.get("name"), "value": c.get("value"),
@@ -43,7 +38,6 @@ def clean(c):
         out["expires"] = float(exp)
     return out
 
-
 def on_resp(resp):
     if "/ajax/" in resp.url or "api.weibo" in resp.url:
         try:
@@ -51,7 +45,6 @@ def on_resp(resp):
         except Exception:
             text = ""
         AJAX.append({"url": resp.url, "snippet": text[:500]})
-
 
 def main():
     cookies = [clean(c) for c in json.load(open(COOKIE_FILE, encoding="utf-8"))]
@@ -92,7 +85,6 @@ def main():
     print("\n=== %d ajax responses (%d unique) ===" % (len(AJAX), len(urls)))
     for u in urls:
         print(u)
-
 
 if __name__ == "__main__":
     main()

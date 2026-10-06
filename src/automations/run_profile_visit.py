@@ -1,4 +1,4 @@
-"""Daily profile-visit runner for the `author` account (uid resolved via cookies.labels.json).
+"""Daily profile-visit runner for the `author` account (uid resolved via the account registry).
 
 Invoked once per day by the `daily-weibo-profile-visit` CodeBuddy automation.
 It reuses the real commands so every behavior stays identical to running them
@@ -57,6 +57,7 @@ from types import SimpleNamespace
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.abspath(os.path.join(HERE, '..'))
 sys.path.insert(0, SRC)
+from config.accounts import AUTHOR_LABEL  # noqa: E402
 os.chdir(SRC)
 
 from datetime_util import record_now
@@ -66,21 +67,13 @@ from weibo_tool.commands.profile_visit import run_visit
 from weibo_tool.commands.stranger_visit import run as run_stranger_visit
 
 ROOT = os.path.dirname(SRC)  # project root
-_CFG = {}
-try:
-    with open(os.path.join(ROOT, 'config', 'experiment.local.json'), encoding='utf-8') as _f:
-        _CFG = json.load(_f)
-except Exception:
-    _CFG = {}
 
-AUTHOR_LABEL = _CFG.get('author_label', 'author')  # resolves to the author uid via cookies.labels.json (non-committed config)
 AUTOMATION_LOG_DIR = os.path.join(SRC, 'log', 'automation')
 os.makedirs(AUTOMATION_LOG_DIR, exist_ok=True)
 LOG = os.path.join(AUTOMATION_LOG_DIR, 'profile_visit_log.jsonl')
 DATA_ROOT = os.path.join(SRC, 'data', 'relations')
 CACHE_ROOT = os.path.join(SRC, '.cache', 'profile_visit')
 STRANGER_CACHE = os.path.join(SRC, '.cache', 'stranger_visit')
-
 
 def _coverage(uid):
     """Per-leg coverage for the JSON summary.
@@ -127,7 +120,6 @@ def _coverage(uid):
             visited_sv = 0
     cov['fof'] = {'visited': visited_sv, 'pool_cached_friends': pool}
     return cov
-
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
@@ -233,7 +225,6 @@ def main():
     if results['stranger_visit']:
         overall = overall or results['stranger_visit']
     return overall
-
 
 if __name__ == '__main__':
     sys.exit(main())

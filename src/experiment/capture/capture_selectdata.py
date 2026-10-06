@@ -13,18 +13,14 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from playwright.sync_api import sync_playwright
 COOKIE_PATH = os.path.join(
@@ -51,7 +47,6 @@ def load_cookies():
             item["secure"] = True
         out.append(item)
     return out
-
 
 def main():
     cookies = load_cookies()
@@ -96,7 +91,6 @@ def main():
     print("captured %d selectdata/data calls -> %s" % (len(calls), OUT))
     for u in calls:
         print("  ", u[:200])
-
 
 if __name__ == "__main__":
     main()

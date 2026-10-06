@@ -6,29 +6,23 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
 BASE = "https://me.weibo.com/api/proxy/native"
 
-
 def _get(a, path, params):
     return a.session.get(BASE + path, params=params,
                          headers={"User-Agent": UA, "Referer": "https://me.weibo.com/"},
                          timeout=20000).json()
-
 
 def find_select_subitems(obj):
     if isinstance(obj, dict):
@@ -44,7 +38,6 @@ def find_select_subitems(obj):
             if r:
                 return r
     return None
-
 
 def main():
     a = Auth()
@@ -70,7 +63,6 @@ def main():
         print("  desc1=%s desc2=%s desc2_unit=%s desc3_text=%s desc3_end=%s" % (
             it.get("desc1"), it.get("desc2"), it.get("desc2_unit"),
             it.get("desc3_text"), it.get("desc3_end")))
-
 
 if __name__ == "__main__":
     main()

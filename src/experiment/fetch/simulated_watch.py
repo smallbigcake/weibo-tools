@@ -54,12 +54,6 @@ import re
 from datetime import datetime, timezone, timedelta
 
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
 
 import argparse
 import os
@@ -67,6 +61,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, _src_root)
+from config.accounts import AUTHOR_UID, VIEWER_UID, load_accounts  # noqa: E402
 
 from auth import Auth
 from logutil import setup as _setup_logging, share_handler, utc_formatter
@@ -95,7 +90,6 @@ log = logging.getLogger('simulated_watch')
 log.setLevel(logging.DEBUG)
 log.propagate = False
 
-
 def setup_batch_log():
     """Create this run's single shared log file and merge the beacon-engine +
     dash-streamer loggers into it (one file for the whole run instead of a
@@ -114,13 +108,11 @@ def setup_batch_log():
     share_handler(_dash_log, _fh)
     return _fh
 
-
 # --------------------------------------------------------------------------
 # Duration helpers: parse "1h" / "300m" / "7200s" / "1h30m5s" (bare = seconds)
 # --------------------------------------------------------------------------
 _DURATION_UNITS = {"h": 3600.0, "m": 60.0, "s": 1.0}
 _DURATION_TOKEN = re.compile(r"(\d+(?:\.\d+)?)\s*([hms])")
-
 
 def parse_duration(text):
     """Parse a human duration into seconds (argparse `type` helper).
@@ -148,7 +140,6 @@ def parse_duration(text):
                          "'20m', '1h' or '1h30m5s'" % text)
     return total
 
-
 def format_duration(sec):
     """Render seconds compactly (e.g. 5415 -> '1h30m15s')."""
     total = int(round(float(sec or 0)))
@@ -161,7 +152,6 @@ def format_duration(sec):
     if s or not out:
         out += "%ds" % s
     return out
-
 
 # --------------------------------------------------------------------------
 # Waterfall source: obtain signed DASH playback URLs as the VIEWER
@@ -186,7 +176,6 @@ def _actionlog_uuid_of(v):
             if au:
                 return au
     return None
-
 
 def fetch_waterfall_page(session, uid, cursor="0", count=20):
     """One page of getWaterFallContent (viewer). Returns (items, next_cursor).
@@ -226,15 +215,12 @@ def fetch_waterfall_page(session, uid, cursor="0", count=20):
     nxt = str((data.get("data") or {}).get("next_cursor") or "")
     return out, nxt
 
-
 def fetch_waterfall(session, uid, cursor="0"):
     """Backward-compat: newest page of the waterfall (no pagination)."""
     items, _ = fetch_waterfall_page(session, uid, cursor)
     return items
 
-
 STATUS_URL = "https://weibo.com/ajax/statuses/show"
-
 
 def get_media_via_statuses(session, mid):
     """Verified-equivalent single-video media_info source (viewer session).
@@ -253,7 +239,6 @@ def get_media_via_statuses(session, mid):
         node = node[0] if node else {}
     pi = node.get("page_info") or (node.get("mblog") or {}).get("page_info") or {}
     return pi.get("media_info") or {}
-
 
 def get_media_map(session, uid, want_mids, days=30, max_pages=12):
     """Build {mid: item(with media_info)} for the requested mids by PAGINATING the
@@ -284,10 +269,6 @@ def get_media_map(session, uid, want_mids, days=30, max_pages=12):
             log.warning("  media_info not found for mid=%s (will skip)", mid)
     return mmap
 
-
-
-
-
 # --------------------------------------------------------------------------
 # One simulated watch (browser order: fetch bytes -> burst -> periodic)
 # --------------------------------------------------------------------------
@@ -296,7 +277,6 @@ def _record(results, endpoint, **fields):
     rec.update(fields)
     results.append(rec)
     return rec
-
 
 def watch_one(session, video, results, args, first_cursor=None, deadline=None):
     mid = video["mid"]
@@ -348,12 +328,15 @@ def watch_one(session, video, results, args, first_cursor=None, deadline=None):
         t0 = time.time()
         out = fn()
         rum_tx.append(_rum_transaction("http-request", name,
-                                       (time.time() - t0) * 1000.0))
+                                       (time.time() - t0) * 1000.0,
+                                       viewer_uid=getattr(session, "viewer_uid", VIEWER_UID)))
         return out
 
     _timed("GET /ajax/log/action",
            lambda: _post_action_step(session, "4288", "20000366",
-                                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID),
+                                     "staruid:%s|loginuid:%s" % (
+                                         AUTHOR_UID,
+                                         getattr(session, "viewer_uid", VIEWER_UID)),
                                      results, first_cursor=first_cursor))
     _timed("GET /ajax/log/action",
            lambda: _post_action_step(session, "7165", "20000393",
@@ -376,7 +359,8 @@ def watch_one(session, video, results, args, first_cursor=None, deadline=None):
     # PLUS one http-request transaction for every XHR fired so far -- not just a
     # lone page-load event.
     _post_rum_step(session,
-                   [_rum_transaction("page-load", "/u/:id", 1500)] + rum_tx,
+                   [_rum_transaction("page-load", "/u/:id", 1500,
+                                     viewer_uid=getattr(session, "viewer_uid", VIEWER_UID))] + rum_tx,
                    results, label="page-load")
 
     # ---- event-driven virtual player (mirrors weibo-pro-next PlayLog + HistoryReport) ----
@@ -400,7 +384,6 @@ def watch_one(session, video, results, args, first_cursor=None, deadline=None):
                         rid=rid, watch_start_ms=watch_start_ms, next_delay=nxt_delay,
                         deadline=deadline)
     return True
-
 
 def _drive_event_player(session, mid, oid, duration, results, args,
                         sid=None, first_cursor=None, streamers=None, rid=None,
@@ -441,7 +424,8 @@ def _drive_event_player(session, mid, oid, duration, results, args,
     rum_last = time.time()
 
     def rum_note(name, dur_ms, outcome="success"):
-        rum_q.append(_rum_transaction("http-request", name, dur_ms, outcome=outcome))
+        rum_q.append(_rum_transaction("http-request", name, dur_ms, outcome=outcome,
+                                     viewer_uid=getattr(session, "viewer_uid", VIEWER_UID)))
 
     def rum_flush(force=False):
         nonlocal rum_last
@@ -541,7 +525,6 @@ def _drive_event_player(session, mid, oid, duration, results, args,
         st.drain()
         log.info("  [dash][%s] done: fetched=%d total=%s" % (st.label, st.fetched, st.total))
 
-
 # --------------------------------------------------------------------------
 # Optional LAGGED creator-center aggregate snapshot (pre/post)
 # --------------------------------------------------------------------------
@@ -560,14 +543,50 @@ def snapshot_aggregates(tag):
         _json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
 
-
 def _val(snap, period, key):
     return (snap.get(period, {}).get(key, {}) or {}).get("value")
-
 
 # --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
+def _viewer_sessions(n):
+    """Build up to `n` logged-in viewer sessions, round-robin style.
+
+    Pulls viewer accounts (role 'viewer', with a resolved uid) from the account
+    registry and restores each silently (no QR). A viewer whose silent SSO login
+    times out or fails is SKIPPED -- the run continues with the rest. Returns the
+    list of usable requests.Session objects (each tagged `.viewer_uid`). Never
+    raises; returns [] when no viewer could be restored.
+    """
+    n = max(1, int(n or 1))
+    allv = [a for a in load_accounts()
+            if "viewer" in (a.get("roles") or []) and a.get("uid")]
+    chosen = allv[:n]
+    if len(allv) < n:
+        log.warning("requested --viewers %d but only %d usable viewer(s) in registry; "
+                    "using those.", n, len(allv))
+    sessions = []
+    for v in chosen:
+        uid = v["uid"]
+        try:
+            s = _viewer_session(uid)
+        except Exception as e:
+            log.warning("viewer %s (%s) login error: %s; skipping",
+                        v.get("alias"), uid, e)
+            continue
+        if s is None:
+            log.warning("viewer %s (%s) could not be restored; skipping",
+                        v.get("alias"), uid)
+            continue
+        # Bind the tag on the ACTUALLY-RETURNED session. _viewer_session() sets
+        # a.session.viewer_uid before returning, but Auth.load()/renew() may swap
+        # the session object internally, leaving the tag on a discarded one -- so
+        # re-bind here to guarantee every beacon credits the correct viewer uid.
+        s.viewer_uid = uid
+        sessions.append(s)
+    return sessions
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Simulated viewer-watch via waterfall page: fetch DASH bytes "
@@ -603,6 +622,10 @@ def main():
                          ">1 fast-forwards for tests). Overrides --delay/--cadence.")
     ap.add_argument("--rounds", type=int, default=1,
                     help="repeat the whole watch N times")
+    ap.add_argument("--viewers", type=int, default=1,
+                    help="number of viewer accounts to round-robin across (2, 3, 4, "
+                         "...); video i is watched by sessions[i %% N]. A viewer whose "
+                         "silent SSO login times out or fails is skipped, not fatal.")
     ap.add_argument("--max-dur", type=float, default=0,
                     help="if set, only watch videos shorter than this (for --index pick)")
     ap.add_argument("--max-wall-time", dest="max_wall_time", type=parse_duration,
@@ -628,8 +651,13 @@ def main():
         args.max_bytes = 2_000_000
         args.rounds = 1
 
-    sess = _viewer_session()
     setup_batch_log()  # single shared log file; merges beacon + dash loggers
+    sessions = _viewer_sessions(args.viewers)
+    log.info("viewer sessions built: %d (round-robin across --viewers %d)",
+             len(sessions), args.viewers)
+    if not sessions:
+        log.error("no usable viewer sessions (all failed login); aborting.")
+        return {"ok": 0, "fail": 0, "videos": 0, "error": "no_viewer"}
     results = []
     t0 = time.time()
 
@@ -655,10 +683,9 @@ def main():
         log.warning("no videos in 30-day window; nothing to do.")
         return {"ok": 0, "fail": 0, "videos": 0}
 
-    return run_watch(sess, window, args, results, t0)
+    return run_watch(sessions, window, args, results, t0)
 
-
-def run_watch(session, window, args, results, t0):
+def run_watch(sessions, window, args, results, t0):
     """Core simulated-watch orchestration shared by simulated_watch.main() and the
     targeted experiment script (simulated_watch_targeted.py). Re-fetches a fresh
     signed DASH URL per video (CDN URLs expire mid-run), fires the playback
@@ -697,7 +724,10 @@ def run_watch(session, window, args, results, t0):
     # Browser-faithful video metadata from the REAL endpoint (waterfall pagination),
     # built once; only used for oid/duration. The expiring CDN URL is re-fetched
     # fresh per video (see loop) because a full round spans hours (> URL ttl=3600s).
-    wmap = get_media_map(session, args.uid, want_mids, args.days)
+    # Accept a single session (legacy / targeted caller) as a 1-element list.
+    if not isinstance(sessions, list):
+        sessions = [sessions]
+    wmap = get_media_map(sessions[0], args.uid, want_mids, args.days)
     # first_cursor = the FIRST video's mid in the author's video list (the page's
     # initial cursor), constant for the whole page. It is what the browser sends in
     # the Referer/reqHost as first_cursor=<firstVideoMid>&layerid=<mid>. Shared with
@@ -726,7 +756,8 @@ def run_watch(session, window, args, results, t0):
                 stopped = True
                 break
             base = wmap.get(v["mid"]) or {}
-            mi = get_media_via_statuses(session, v["mid"])   # fresh signed DASH URL
+            sess = sessions[(vi - 1) % len(sessions)]
+            mi = get_media_via_statuses(sess, v["mid"])   # fresh signed DASH URL
             if not mi:
                 mi = base.get("media_info") or {}          # fallback (may be expired)
             if not mi:
@@ -744,7 +775,7 @@ def run_watch(session, window, args, results, t0):
             log.info("=== [WATCH] round %d/%d  video %d/%d  mid=%s  title=%s ===",
                      rnd, args.rounds, vi, len(window), v["mid"],
                      (video["title"] or "")[:80])
-            g = watch_one(session, video, results, args, first_cursor,
+            g = watch_one(sess, video, results, args, first_cursor,
                           deadline=deadline)
             if g is True:
                 ok += 1
@@ -790,7 +821,6 @@ def run_watch(session, window, args, results, t0):
     return {"videos": len(window), "rounds": args.rounds, "ok": ok, "fail": fail,
             "elapsed_seconds": round(elapsed, 2),
             "watched_seconds": int(watched_seconds)}
-
 
 if __name__ == "__main__":
     main()

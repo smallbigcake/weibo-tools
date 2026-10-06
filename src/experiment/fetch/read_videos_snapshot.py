@@ -20,12 +20,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -34,6 +29,7 @@ from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID  # noqa: E402
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
@@ -41,9 +37,7 @@ from filestamp import batch_stamp
 ENDPOINT = "https://weibo.com/ajax/multimedia/getVideoList"
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
 from datetime_util import utc8_from_ms  # noqa: E402  (server-ms -> Beijing display)
-
 
 def fetch_all():
     a = Auth()
@@ -84,7 +78,6 @@ def fetch_all():
         time.sleep(1.0)
     return out
 
-
 def main():
     videos = fetch_all()
     videos.sort(key=lambda v: v.get("create_time_utc8") or "", reverse=True)
@@ -112,7 +105,6 @@ def main():
         print("  [%s] play=%s like=%s cmt=%s rpost=%s  %s" %
               (v["create_time_utc8"], v["play_count"], v["like_count"],
                v["comment_count"], v["repost_count"], v["title"][:30]))
-
 
 if __name__ == "__main__":
     main()

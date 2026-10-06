@@ -1,3 +1,4 @@
+from config.accounts import AUTHOR_UID  # noqa: E402
 """On weibo.com/creatorcenter (as author), capture ALL /ajax response URLs and a
 snippet of each body, so we can locate the video play-duration read endpoint by
 name rather than by fragile keyword matching.
@@ -9,12 +10,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -24,7 +20,6 @@ EXP = os.path.dirname(os.path.abspath(__file__))
 COOKIE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                            "cookies.%s.weibo" % AUTHOR_UID)
 AJAX = []
-
 
 def clean(c):
     out = {"name": c.get("name"), "value": c.get("value"),
@@ -40,7 +35,6 @@ def clean(c):
         out["expires"] = float(exp)
     return out
 
-
 def on_response(response):
     url = response.url
     if "/ajax/" not in url and "api.weibo" not in url:
@@ -51,7 +45,6 @@ def on_response(response):
     except Exception:
         text = ""
     AJAX.append({"url": url, "snippet": text[:600]})
-
 
 def main():
     cookies = [clean(c) for c in json.load(open(COOKIE_FILE, encoding="utf-8"))]
@@ -86,7 +79,6 @@ def main():
     print("=== %d ajax responses (unique urls: %d) ===" % (len(AJAX), len(set(urls))))
     for u in sorted(set(urls)):
         print(u)
-
 
 if __name__ == "__main__":
     main()

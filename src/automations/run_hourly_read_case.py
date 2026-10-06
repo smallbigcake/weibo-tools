@@ -27,26 +27,12 @@ import requests
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.abspath(os.path.join(HERE, '..'))
 sys.path.insert(0, SRC)
+from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
 os.chdir(SRC)
 
 from auth import Auth  # noqa: E402
 from datetime_util import record_now  # noqa: E402
 
-
-def _load_experiment_config():
-    """Local, git-ignored config holding the Weibo account UIDs."""
-    cfg_path = os.path.join(os.path.dirname(SRC), 'config',
-                            'experiment.local.json')
-    if not os.path.exists(cfg_path):
-        raise SystemExit('Missing %s - copy config/experiment.local.json.example '
-                         'to it and fill in your Weibo UIDs' % cfg_path)
-    with open(cfg_path, encoding='utf-8') as f:
-        return json.load(f)
-
-
-_EXP = _load_experiment_config()
-AUTHOR_UID = _EXP['author_uid']
-VIEWER_UID = _EXP['viewer_uid']
 CASE_MB = 'P9v636F64'
 CASE_ID = '5122644911587948'
 DETAIL = 'https://weibo.com/%s/%s' % (AUTHOR_UID, CASE_MB)
@@ -56,7 +42,6 @@ LOG = os.path.join(SRC, 'log', 'automation', 'hourly_read_case.jsonl')
 from constants import BROWSER_USER_AGENT as UA
 H_JSON = {'User-Agent': UA, 'Accept': 'application/json, text/plain, */*',
           'Referer': 'https://weibo.com/', 'x-requested-with': 'XMLHttpRequest'}
-
 
 def build_viewer_session():
     """Authenticated requests session for the viewer, loaded from its cookie file."""
@@ -72,7 +57,6 @@ def build_viewer_session():
                 pass
     return s
 
-
 def measure(session):
     """reads_count for CASE_ID via statuses/extend (single precise call)."""
     for _ in range(3):
@@ -87,7 +71,6 @@ def measure(session):
             pass
         time.sleep(2)
     return None
-
 
 def visit(session, url, referer=None):
     """Pure-HTTP access to the post detail page (no browser).
@@ -107,7 +90,6 @@ def visit(session, url, referer=None):
     except Exception as e:
         return 'http_err:%s' % str(e)[:80]
 
-
 def main():
     author = Auth()
     author.uid = AUTHOR_UID
@@ -125,7 +107,6 @@ def main():
     with open(LOG, 'a', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
     print(json.dumps(rec, ensure_ascii=False), flush=True)
-
 
 if __name__ == '__main__':
     main()

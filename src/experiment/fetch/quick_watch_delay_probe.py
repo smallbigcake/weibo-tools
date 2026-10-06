@@ -44,12 +44,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import argparse
 import hashlib
 import os
@@ -62,6 +57,7 @@ from urllib.parse import urlencode
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, SRC_DIR)
 sys.path.insert(0, os.path.join(SRC_DIR, 'experiment', 'fetch'))
+from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
 from auth import Auth
 from beacon_engine import send_playstatistics as _bc_send_playstatistics
 
@@ -73,18 +69,14 @@ SOURCE = "339644097"
 from constants import BROWSER_USER_AGENT as UA
 CREATOR_REF = "https://weibo.com/creator"
 
-
 def _md5(s):
     return hashlib.md5(s.encode("utf-8")).hexdigest()
-
 
 def _rand5():
     return "".join(random.choice("abcdefghijklmnopqrstuvwxyz") for _ in range(5))
 
-
 def _xsrf(session):
     return session.cookies.get("XSRF-TOKEN", "")
-
 
 def _multipart(fields):
     """Build a multipart/form-data body (mirrors the browser's WebKit boundary)."""
@@ -97,7 +89,6 @@ def _multipart(fields):
     parts.append("------WebKitFormBoundaryAAAA--\r\n")
     return "".join(parts)
 
-
 def _ajax_headers(session):
     # /aj/ and /ajax/log/* both need the CSRF token + xhr header (else 403).
     return {
@@ -108,7 +99,6 @@ def _ajax_headers(session):
         "x-requested-with": "XMLHttpRequest",
     }
 
-
 def send_playstatistics(session, mid, media_id, delay):
     """THIRD playback beacon (the missing one). Fired ONCE per video at play
     start. Delegates to `beacon_engine.send_playstatistics`
@@ -117,7 +107,6 @@ def send_playstatistics(session, mid, media_id, delay):
     status, ec, _r = _bc_send_playstatistics(session, mid, media_id, VIEWER_UID, delay)
     print("  playstatistics mid=%s -> %s" % (mid, status))
     return status
-
 
 def send_h5playlog(session, mid, media_id, duration, play_ms, delay):
     """SECOND playback beacon: heartbeats with valid_play_duration (the field
@@ -159,7 +148,6 @@ def send_h5playlog(session, mid, media_id, duration, play_ms, delay):
         print("  h5playlog mid=%s -> ERROR %s" % (mid, ex))
     time.sleep(delay)
 
-
 def fetch_video_list(session, pages=8):
     """Return recent author videos [{mid, oid, duration, play_count}] via
     getVideoList, paging forward until `pages` pages are read."""
@@ -189,13 +177,11 @@ def fetch_video_list(session, pages=8):
             break
     return out
 
-
 def read_play_counts(session, mids):
     """Return {mid: live play_count} for the requested mids from getVideoList."""
     want = set(str(m) for m in mids if m)
     lst = fetch_video_list(session)
     return {v["mid"]: v["play_count"] for v in lst if v["mid"] in want}
-
 
 def choose_target(lst, mid=None, max_dur=120):
     if mid:
@@ -208,7 +194,6 @@ def choose_target(lst, mid=None, max_dur=120):
         cand = lst
     return cand[0]
 
-
 def choose_control(lst, target_mid, max_dur=300):
     for v in lst:
         if v["mid"] != target_mid and 0 < (v.get("duration") or 0) < max_dur:
@@ -217,7 +202,6 @@ def choose_control(lst, target_mid, max_dur=300):
         if v["mid"] != target_mid:
             return v
     return None
-
 
 def build_sequence(duration, cadence):
     """Full heartbeat sequence (start, +cadence heartbeats, end)."""
@@ -234,7 +218,6 @@ def build_sequence(duration, cadence):
     if seq[-1][1] != full:
         seq.append(("1", full))
     return seq
-
 
 def send_sequence(session, mid, oid, duration, seq, delay, contribution=0):
     media_id = str(oid).split(":")[-1]
@@ -271,7 +254,6 @@ def send_sequence(session, mid, oid, duration, seq, delay, contribution=0):
 
         time.sleep(delay)
 
-
 def snapshot_aggregates(tag):
     """OPTIONAL, LAGGED: creator-center aggregates (yesterday/7d/30d)."""
     import read_video_aggregates as _ra
@@ -290,10 +272,8 @@ def snapshot_aggregates(tag):
         json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
 
-
 def _val(snap, period, key):
     return (snap.get(period, {}).get(key, {}) or {}).get("value")
-
 
 def main():
     ap = argparse.ArgumentParser(description="FastWatch delay-probe (single video, real-time pace, live play_count)")
@@ -391,13 +371,11 @@ def main():
                 print("  %-9s %-15s : %s -> %s  (delta %s)"
                       % (period, key, pv, pp, delta))
 
-
 def _delta(a, b):
     try:
         return float(a) - float(b)
     except (TypeError, ValueError):
         return None
-
 
 if __name__ == "__main__":
     main()

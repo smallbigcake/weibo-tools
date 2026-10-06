@@ -13,23 +13,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))       # src/experiment/fetch
 SRC = os.path.dirname(os.path.dirname(HERE))            # src
 ROOT = os.path.dirname(SRC)                             # project root
 sys.path.insert(0, SRC)
+from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
 os.chdir(SRC)
 from auth import Auth, USER_AGENT
 from constants import MOBILE_USER_AGENT
 
-
-def _load_experiment_config():
-    cfg_path = os.path.join(ROOT, 'config', 'experiment.local.json')
-    if not os.path.exists(cfg_path):
-        raise SystemExit('Missing %s - copy config/experiment.local.json.example '
-                         'to it and fill in your Weibo UIDs' % cfg_path)
-    with open(cfg_path, encoding='utf-8') as f:
-        return json.load(f)
-
-
-_EXP = _load_experiment_config()
-AUTHOR_UID = _EXP['author_uid']
-VIEWER_UID = _EXP['viewer_uid']
 MID = '5281120260198165'
 MBLOGID = 'Qy2j80Pyd'
 
@@ -42,10 +30,8 @@ H_MOBILE = {
     'Referer': 'https://m.weibo.cn/',
 }
 
-
 def load(uid):
     a = Auth(); a.uid = uid; a.load(); return a
-
 
 def reads_count(author):
     r = author.session.get('https://weibo.com/ajax/statuses/mymblog',
@@ -56,12 +42,10 @@ def reads_count(author):
             return it.get('reads_count')
     return None
 
-
 def attitudes(auth):
     r = auth.session.get('https://weibo.com/ajax/statuses/show',
                          params={'id': MID}, headers=H_JSON, timeout=20)
     return r.json().get('attitudes_count')
-
 
 def main():
     author = load(AUTHOR_UID)
@@ -94,7 +78,6 @@ def main():
     print('\nCONCLUSION: viewer writes work (likes change attitudes_count). '
           'reads_count is NOT incremented by any scripted view/HTML/mobile/feed '
           'request -- it is gated to genuine client renders.')
-
 
 if __name__ == '__main__':
     main()

@@ -40,16 +40,11 @@ import json
 import argparse
 import importlib.util
 import json as _json
-try:
-    _CFG = _json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-VIEWER_UID = _CFG.get('viewer_uid')
-VIEWER_LABEL = _CFG.get('viewer_label', 'viewer')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.abspath(os.path.join(HERE, '..'))
 sys.path.insert(0, SRC)
+from config.accounts import VIEWER_UID, VIEWER_LABEL  # noqa: E402
 os.chdir(SRC)
 
 import logging
@@ -63,14 +58,12 @@ os.makedirs(AUTOMATION_LOG_DIR, exist_ok=True)
 LOG = os.path.join(AUTOMATION_LOG_DIR, 'fastwatch_log.jsonl')
 EXP_MODULE = os.path.join(SRC, 'experiment', 'fetch', 'beacon_engine.py')
 
-
 def _load_experiment():
     """Import the experiment module by file path (avoids package layout issues)."""
     spec = importlib.util.spec_from_file_location('beacon_engine', EXP_MODULE)
     qw = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(qw)
     return qw
-
 
 def _preflight_session(viewer_uid):
     """Best-effort silent session refresh for unattended daily runs.
@@ -109,7 +102,6 @@ def _preflight_session(viewer_uid):
     except Exception as e:
         log.error('preflight: session refresh error (%s); aborting.' % e)
         return False
-
 
 def main():
     ap = argparse.ArgumentParser(
@@ -203,7 +195,6 @@ def main():
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
     log.info(json.dumps(rec, ensure_ascii=False))
     return 0
-
 
 if __name__ == '__main__':
     sys.exit(main())

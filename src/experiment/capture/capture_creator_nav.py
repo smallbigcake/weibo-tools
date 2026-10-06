@@ -1,3 +1,4 @@
+from config.accounts import AUTHOR_UID  # noqa: E402
 """Locate the creator data-center route and any per-video play-duration read API.
 
 1. On weibo.com/creatorcenter (author): print all nav anchors (text -> href).
@@ -11,12 +12,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -27,7 +23,6 @@ COOKIE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
                            "cookies.%s.weibo" % AUTHOR_UID)
 DETAIL = "https://weibo.com/%s/5339206551602803" % AUTHOR_UID
 HITS = []
-
 
 def clean(c):
     out = {"name": c.get("name"), "value": c.get("value"),
@@ -43,7 +38,6 @@ def clean(c):
         out["expires"] = float(exp)
     return out
 
-
 def on_detail(resp):
     url = resp.url
     if "/ajax/" not in url:
@@ -54,7 +48,6 @@ def on_detail(resp):
         return
     if any(k in text.lower() for k in ["播放", "duration", "video", "stat", "完播", "play"]):
         HITS.append({"url": url, "snippet": text[:500]})
-
 
 def main():
     cookies = [clean(c) for c in json.load(open(COOKIE_FILE, encoding="utf-8"))]
@@ -95,7 +88,6 @@ def main():
     for h in HITS[:25]:
         print("\nURL:", h["url"])
         print("SNIP:", h["snippet"].replace("\n", " ")[:350])
-
 
 if __name__ == "__main__":
     main()

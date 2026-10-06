@@ -77,12 +77,6 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
 
 import argparse
 import gzip
@@ -102,6 +96,18 @@ import logging
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 _src_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, _src_root)
+from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
+
+
+def _viewer_uid_of(session):
+    """The viewer uid to credit for a beacon sent on `session`.
+
+    Falls back to the module-level VIEWER_UID when the session was not built by
+    _viewer_session() (single-viewer / legacy callers). Round-robin multi-viewer
+    runs tag each session with `.viewer_uid` so the credited viewer matches the
+    cookie actually used for the request.
+    """
+    return getattr(session, "viewer_uid", VIEWER_UID)
 
 from auth import Auth
 from logutil import setup as _setup_logging
@@ -126,7 +132,6 @@ log.propagate = False
 if not log.handlers:
     log.addHandler(logging.NullHandler())
 
-
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VIDEO_DATA = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
 # All watch run logs live under src/data/watch/ (kept apart from the shared
@@ -150,11 +155,9 @@ WATCH_REFERER = "https://weibo.com/u/%s?tabtype=newVideo" % AUTHOR_UID
 PAGE_DELAY = 1.0
 END_CURSORS = {"", "0", "-1"}
 
-
 # Header names whose VALUES must never be written to disk in cleartext.
 _SENSITIVE_HEADERS = {'cookie', 'authorization', 'x-xsrf-token', 'xsrf-token',
                       'set-cookie', 'proxy-authorization'}
-
 
 def _redact_headers(headers):
     out = {}
@@ -165,7 +168,6 @@ def _redact_headers(headers):
     for k, v in items:
         out[k] = '<redacted>' if str(k).lower() in _SENSITIVE_HEADERS else v
     return out
-
 
 def _log_http(r, label, include_resp_body=True):
     """Dump the request + response of one HTTP call to the logger (file only via
@@ -197,11 +199,9 @@ def _log_http(r, label, include_resp_body=True):
     else:
         log.debug("  resp body   : (omitted: large binary payload)")
 
-
 def _daily_log_path():
     day = day_stamp()
     return os.path.join(WATCH_DIR, "beacon_engine_log_%s.jsonl" % day)
-
 
 def _archive_current_log():
     if not os.path.exists(LOG_PATH):
@@ -226,14 +226,11 @@ def _archive_current_log():
     shutil.copy2(LOG_PATH, dst)
     return dst
 
-
 def method_label(delay):
     """Derive the run's pace label from --delay (1s vs 30s stays distinguishable)."""
     return "FastWatch-%.0fs" % delay
 
-
 from datetime_util import utc8_from_ms  # noqa: E402  (server-ms -> Beijing display)
-
 
 # --------------------------------------------------------------------------
 # Video list: live getVideoList (normalized) with static-cache fallback
@@ -255,7 +252,6 @@ def _norm(raw_items):
             "stats": it.get("statistics") or {},
         })
     return out
-
 
 def fetch_video_list(session, pages=8, days=30):
     """Return recent author videos (normalized) via getVideoList, newest-first,
@@ -290,7 +286,6 @@ def fetch_video_list(session, pages=8, days=30):
             break
     return out
 
-
 def load_window(days):
     """Normalized author videos published within the last `days` days (from the
     static src/data/creator_center/creator_center_author_videos.json snapshot; fallback when live is unavailable)."""
@@ -301,7 +296,6 @@ def load_window(days):
            if v.get("create_time") and v["create_time"] >= cutoff]
     out.sort(key=lambda v: v.get("create_time", 0), reverse=True)
     return out
-
 
 def get_video_list(days, use_cached_list=False):
     """Return (videos, source). 'live' from getVideoList, else 'cache' (static)."""
@@ -325,7 +319,6 @@ def get_video_list(days, use_cached_list=False):
         log.warning("author session not available; using cached video list")
     return load_window(days), "cache"
 
-
 def log_video_list(videos, days, source):
     log.info("===== video list (last %d d, source=%s): %d videos =====",
              days, source, len(videos))
@@ -333,7 +326,6 @@ def log_video_list(videos, days, source):
         log.info("  #%02d  mid=%s  dur=%.0fs  created=%s  %s",
                  i, v["mid"], v.get("duration", 0), utc8_from_ms(v.get("create_time")) or "?",
                  (v.get("title") or "")[:40])
-
 
 def build_sequence(duration, cadence):
     """Full heartbeat sequence (start, +cadence progress heartbeats, end)."""
@@ -351,13 +343,11 @@ def build_sequence(duration, cadence):
         seq.append(("1", full))
     return seq
 
-
 # --------------------------------------------------------------------------
 # Live metrics (PLAY COUNT always; PLAY DURATION best-effort / lagged)
 # --------------------------------------------------------------------------
 _PLAY_DURA_KEYS = ("play_duration", "play_dura_count", "play_totallength_sec",
                    "play_totallength", "total_length")
-
 
 def read_metrics(session, mids):
     """Return {mid: {play_count, play_duration, _keys}} for requested mids.
@@ -383,7 +373,6 @@ def read_metrics(session, mids):
                              "play_duration": pd, "_keys": sorted(st.keys())}
     return out
 
-
 def choose_target(lst, mid=None, max_dur=120):
     if mid:
         for v in lst:
@@ -393,13 +382,11 @@ def choose_target(lst, mid=None, max_dur=120):
     cand = [v for v in lst if (v.get("duration") or 0) < max_dur]
     return (cand or lst)[0]
 
-
 def _delta(a, b):
     try:
         return float(a) - float(b)
     except (TypeError, ValueError):
         return None
-
 
 # --------------------------------------------------------------------------
 # Channel 1: play_history/report.json ; Channel 2: ajax/log/h5playlog
@@ -414,7 +401,6 @@ def req_host_value(mid, first_cursor=None):
     fc = first_cursor if first_cursor is not None else mid
     return "https://weibo.com/u/%s?tabtype=newVideo&first_cursor=%s&layerid=%s" % (
         AUTHOR_UID, fc, mid)
-
 
 def first_cursor_of(items):
     """Return the FIRST video's mid -- the author's video-list initial cursor
@@ -433,13 +419,11 @@ def first_cursor_of(items):
             return mid
     return None
 
-
 def _record(results, endpoint, **fields):
     rec = {"endpoint": endpoint, "ts": time.time()}
     rec.update(fields)
     results.append(rec)
     return rec
-
 
 def _post_report_step(session, mid, oid, duration, play_type, sec, results,
                       first_cursor=None):
@@ -498,15 +482,13 @@ def _post_report_step(session, mid, oid, duration, play_type, sec, results,
             status=status, error_code=ec, error=err, body=body)
     return next_delay
 
-
 def _rand5():
     import string
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
 
-
 def build_h5playlog_data(mid, oid, duration, playduration_ms,
                          valid_play_duration_ms, play_time, quit_status="",
-                         sid=None, firstframe_time_ms="878"):
+                         sid=None, firstframe_time_ms="878", viewer_uid=None):
     """Build the h5playlog FormData `data` field (semicolon CSV) as the real client
     does. Field order reverse-engineered from the 2026-09-18 HAR; the empty 9th
     field (index 8) is preserved verbatim. sig = md5(data+key+'encryptedString').
@@ -523,7 +505,7 @@ def build_h5playlog_data(mid, oid, duration, playduration_ms,
     key = "Log_h5play_%s_%d" % (_rand5(), ts_ms)
     values = [
         play_time,                       # 0 play_time (Beijing, set once)
-        str(VIEWER_UID),                 # 1 uid (viewer)
+        str(viewer_uid if viewer_uid is not None else VIEWER_UID),  # 1 uid (viewer)
         str(oid),                        # 2 object_id / oid
         str(mid),                        # 3 mid
         str(AUTHOR_UID),                 # 4 mid_uid (author)
@@ -546,7 +528,6 @@ def build_h5playlog_data(mid, oid, duration, playduration_ms,
     data = ";".join(values) + ";" + extend
     sig = hashlib.md5((data + key + "encryptedString").encode("utf-8")).hexdigest()
     return data, key, sig
-
 
 def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
                          play_time, is_last, results, sid=None, first_cursor=None,
@@ -578,7 +559,8 @@ def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
     data, key, sig = build_h5playlog_data(
         mid, oid, duration, pos_ms, int(valid_play_duration_ms), play_time,
         quit_status=quit_status, sid=sid,
-        firstframe_time_ms=firstframe_time_ms)
+        firstframe_time_ms=firstframe_time_ms,
+        viewer_uid=_viewer_uid_of(session))
     body = err = None
     ec = None
     xsrf = session.cookies.get("XSRF-TOKEN", domain="weibo.com")
@@ -616,7 +598,6 @@ def _post_h5playlog_step(session, mid, oid, duration, play_type, sec,
             valid_play_duration_ms=pos_ms, quit_status=quit_status,
             status=status, error_code=ec, error=err, body=body)
 
-
 # --- CHANNEL 3 + CHANNEL 4 low-level builders -------------------------------------
 # Moved here from the now-deleted playback_beacons.py so ALL six channels live in
 # this one module. quick_watch_delay_probe.py imports send_playstatistics from here.
@@ -625,10 +606,8 @@ PLAYSTAT_SALT = "yixiong&zhaolong5"  # PlayStatistics._md5Log salt (NOT "encrypt
 READ_URL = "https://weibo.com/ajax/log/read"  # PC_real_read endpoint
 _PS_COUNT = [0]  # faithful replica of PlayStatistics._logKey()'s `count++`
 
-
 def md5(s):
     return hashlib.md5(s.encode("utf-8")).hexdigest()
-
 
 def build_playstatistics(mid, media_id, viewer_uid, actionlog_uuid=None):
     """Return (data, key, sig) for ONE playstatistics beacon, exactly as the
@@ -653,7 +632,6 @@ def build_playstatistics(mid, media_id, viewer_uid, actionlog_uuid=None):
     sig = md5(data + key + PLAYSTAT_SALT)
     return data, key, sig
 
-
 def _xsrf_from(session):
     """XSRF-TOKEN cookie value ('' when absent) required by weibo.com/ajax endpoints."""
     try:
@@ -663,7 +641,6 @@ def _xsrf_from(session):
             return session.cookies.get("XSRF-TOKEN") or ""
         except Exception:
             return ""
-
 
 def _multipart_body(fields, boundary):
     """Build a raw multipart/form-data body (bytes) the way the browser's
@@ -679,7 +656,6 @@ def _multipart_body(fields, boundary):
     lines.append("--%s--" % boundary)
     return ("\r\n".join(lines)).encode("utf-8") + b"\r\n"
 
-
 def build_webkit_multipart(fields):
     """Generate a Chrome-style `----WebKitFormBoundary<16 alnum>` boundary, build
     the raw multipart/form-data body, and return `(body_bytes, content_type)`.
@@ -692,7 +668,6 @@ def build_webkit_multipart(fields):
     boundary = "----WebKitFormBoundary" + "".join(
         random.choices(string.ascii_letters + string.digits, k=16))
     return _multipart_body(fields, boundary), "multipart/form-data; boundary=%s" % boundary
-
 
 def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5,
                         referer=None, actionlog_uuid=None, first_cursor=None):
@@ -731,7 +706,6 @@ def send_playstatistics(session, mid, media_id, viewer_uid, delay=0.5,
     except Exception as ex:
         return None, str(ex), None
 
-
 def _post_playstatistics_step(session, mid, media_id, results, actionlog_uuid=None,
                               first_cursor=None):
     """CHANNEL 3: one `aj/video/playstatistics?ajwvr=6` beacon at play start.
@@ -740,7 +714,7 @@ def _post_playstatistics_step(session, mid, media_id, results, actionlog_uuid=No
     post's real actionlog uuid) so `keys`/`uuid` match the browser, and
     `first_cursor` (the first video's mid) so the Referer matches the browser's
     page URL (first_cursor=<firstVideoMid>&layerid=<currentVideoMid>)."""
-    status, ec, r = send_playstatistics(session, mid, media_id, VIEWER_UID, 0.5,
+    status, ec, r = send_playstatistics(session, mid, media_id, _viewer_uid_of(session), 0.5,
                                         referer=req_host_value(mid, first_cursor),
                                         actionlog_uuid=actionlog_uuid)
     log.info("  [playstats] mid=%s media_id=%s -> %s err=%s"
@@ -749,7 +723,6 @@ def _post_playstatistics_step(session, mid, media_id, results, actionlog_uuid=No
         _log_http(r, 'beacon playstatistics')
     _record(results, "playstatistics", mid=mid, media_id=media_id,
             status=status, error_code=ec)
-
 
 def build_read_log(mid, read_ms, rid=None):
     """Return the JSON `data` string for ONE PC_real_read beacon.
@@ -791,7 +764,6 @@ def build_read_log(mid, read_ms, rid=None):
     # default would add them. See src/tmp/compare_read_body.py.
     return json.dumps([rec], ensure_ascii=False, separators=(",", ":"))
 
-
 def send_read_log(session, mid, read_ms, rid=None, delay=0.5, referer=None):
     """POST one PC_real_read beacon. Returns (http_status, error_code, response).
 
@@ -831,7 +803,6 @@ def send_read_log(session, mid, read_ms, rid=None, delay=0.5, referer=None):
     except Exception as ex:
         return None, str(ex), None
 
-
 def _post_read_step(session, mid, read_ms, results, rid=None, first_cursor=None):
     """CHANNEL 4: one `ajax/log/read` (PC_real_read) beacon, read_duration = cumulative
     watched ms. Recovered from the 2026-09-18 HAR; the strongest candidate for the
@@ -850,7 +821,6 @@ def _post_read_step(session, mid, read_ms, results, rid=None, first_cursor=None)
         _log_http(r, 'beacon read')
     _record(results, "read", mid=mid, read_ms=read_ms, rid=rid,
             status=status, error_code=ec)
-
 
 def _post_action_step(session, act_code, uicode, ext, results, label=None,
                       first_cursor=None):
@@ -914,7 +884,6 @@ def _post_action_step(session, act_code, uicode, ext, results, label=None,
     _record(results, "action", act_code=act_code, uicode=uicode,
             status=status, error_code=ec, error=err)
 
-
 # --------------------------------------------------------------------------
 # RUM (Real User Monitoring) beacon -- CHANNEL 6 (NEW, 2026-09-25, "to be safe")
 # --------------------------------------------------------------------------
@@ -936,8 +905,7 @@ _RUM_METADATA = {
     }
 }
 
-
-def _rum_transaction(kind, name, duration_ms, url=None, outcome=None):
+def _rum_transaction(kind, name, duration_ms, url=None, outcome=None, viewer_uid=None):
     """Build one RUM `transaction` event dict (page-load or http-request)."""
     tx = {
         "transaction": {
@@ -951,7 +919,7 @@ def _rum_transaction(kind, name, duration_ms, url=None, outcome=None):
                     "referer": "",
                     "url": url or ("https://weibo.com/u/%s?tabtype=newVideo" % AUTHOR_UID),
                 },
-                "user": {"id": int(VIEWER_UID)},
+                "user": {"id": int(viewer_uid if viewer_uid is not None else VIEWER_UID)},
             },
             "span_count": {"started": 0},
             "sampled": False,
@@ -965,7 +933,6 @@ def _rum_transaction(kind, name, duration_ms, url=None, outcome=None):
             "transfer_size": 3320, "encoded_body_size": 3020, "decoded_body_size": 7475,
         }
     return tx
-
 
 def _post_rum_step(session, transactions, results, label=None):
     """POST one RUM NDJSON batch (metadata + transactions), gzip-compressed.
@@ -997,7 +964,6 @@ def _post_rum_step(session, transactions, results, label=None):
         log.warning("  [rum] %s -> ERROR %s" % (label or "", ex))
     _record(results, "rum", label=label, status=status, error=err)
 
-
 def replay_one(session, mid, oid, duration, seq, delay, play_time, results, channels,
                rid=None, first_cursor=None):
     """Replay ONE video.
@@ -1028,7 +994,7 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
     # (the real browser does this; without it the watch is never credited).
     log.info("  [burst] action(4288 profile) + action(7165 video)")
     _post_action_step(session, "4288", "20000366",
-                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, VIEWER_UID), results,
+                     "staruid:%s|loginuid:%s" % (AUTHOR_UID, _viewer_uid_of(session)), results,
                      first_cursor=first_cursor)
     _post_action_step(session, "7165", "20000393",
                      "vuid:%s|welfare:0" % AUTHOR_UID, results,
@@ -1036,7 +1002,8 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
     # CHANNEL 6 (RUM): one page-load transaction at session start (the browser's
     # first rum event), for client-session fidelity.
     _post_rum_step(session,
-                   [_rum_transaction("page-load", "/u/:id", 1500)],
+                   [_rum_transaction("page-load", "/u/:id", 1500,
+                                     viewer_uid=_viewer_uid_of(session))],
                    results, label="page-load")
     if channels in ("triple", "quad"):
         if media_id:
@@ -1060,10 +1027,10 @@ def replay_one(session, mid, oid, duration, seq, delay, play_time, results, chan
         _post_rum_step(session,
                        [_rum_transaction("http-request", "watch heartbeat %d" % i,
                                          int((delay or 1) * 1000) or 50,
-                                         outcome="success")],
+                                         outcome="success",
+                                         viewer_uid=_viewer_uid_of(session))],
                        results, label="hb%d" % i)
         time.sleep(delay)
-
 
 # --------------------------------------------------------------------------
 # Optional LAGGED creator-center aggregate snapshot
@@ -1085,10 +1052,8 @@ def snapshot_aggregates(tag):
         json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
 
-
 def _val(snap, period, key):
     return (snap.get(period, {}).get(key, {}) or {}).get("value")
-
 
 def _http_ok(rec):
     """True when a recorded call answered 2xx.
@@ -1100,7 +1065,6 @@ def _http_ok(rec):
         return 200 <= int(rec.get("status")) < 300
     except (TypeError, ValueError):
         return False
-
 
 def _write_audit(results, channels):
     run_stamp = batch_stamp()
@@ -1123,7 +1087,6 @@ def _write_audit(results, channels):
     log.info("  distinct error_code values: %s", ec_set)
     return errs
 
-
 def _save_run_record(run_record):
     archived = _archive_current_log()
     if archived:
@@ -1136,18 +1099,29 @@ def _save_run_record(run_record):
     log.info("  latest log -> %s", LOG_PATH)
     log.info("  daily history -> %s", day_path)
 
+def _viewer_session(viewer_uid=VIEWER_UID):
+    """Build a logged-in viewer session for `viewer_uid` (silent SSO only; no QR).
 
-def _viewer_session():
+    Returns the requests.Session, tagged with `.viewer_uid` so beacon steps credit
+    the correct viewer. Returns None when the session cannot be restored (silent SSO
+    timed out / failed) -- callers should skip that viewer instead of aborting the
+    whole run.
+    """
     a = Auth()
-    a.uid = VIEWER_UID
+    a.uid = viewer_uid
     a.load()
     if not a.test_login():
-        log.warning("viewer session NOT logged in; attempting silent SSO renew...")
-        if not a.renew():
-            raise SystemExit("viewer session could not be restored; aborting.")
+        log.warning("viewer %s NOT logged in; attempting silent SSO renew...", viewer_uid)
+        try:
+            if not a.renew():
+                log.warning("viewer %s silent SSO renew failed; skipping", viewer_uid)
+                return None
+        except Exception as e:
+            log.warning("viewer %s login error (%s); skipping", viewer_uid, e)
+            return None
         a.save_cookies()
+    a.session.viewer_uid = viewer_uid
     return a.session
-
 
 def main():
     ap = argparse.ArgumentParser(
@@ -1429,7 +1403,6 @@ def main():
             "delay": args.delay, "cadence": args.cadence, "repeat": args.repeat,
             "total_videos_played": len(all_log), "elapsed_seconds": round(elapsed, 2),
             "total_watch_seconds": round(total_watch_seconds, 2), "ok": ok, "fail": fail}
-
 
 if __name__ == "__main__":
     main()

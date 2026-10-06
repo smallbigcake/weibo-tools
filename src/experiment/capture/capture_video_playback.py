@@ -15,12 +15,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -34,12 +29,12 @@ VIDEO_URL = (f"https://weibo.com/u/{AUTHOR_UID}?tabtype=newVideo"
 _SRC = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # src/
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
+from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
 COOKIE_PATH = os.path.join(_SRC, "cookies.%s.weibo" % VIEWER_UID)
 OUT_PATH = os.path.join(_SRC, "tmp", "capture", "video_playback_capture.json")
 from constants import BROWSER_USER_AGENT as USER_AGENT
 from datetime_util import record_now
 PLAY_SECONDS = 25  # how long to keep the page open after triggering playback
-
 
 def load_cookies_for_playwright(path):
     """Read the project cookie jar and normalize to Playwright's add_cookies format."""
@@ -73,7 +68,6 @@ def load_cookies_for_playwright(path):
             item["sameSite"] = samesite
         out.append(item)
     return out
-
 
 def main():
     cookies = load_cookies_for_playwright(COOKIE_PATH)
@@ -222,7 +216,6 @@ def main():
     with open(OUT_PATH, "w", encoding="utf-8", newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("Saved %d requests to %s" % (len(records), OUT_PATH))
-
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -17,12 +17,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import os
 import re
 import sys
@@ -30,6 +25,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))          # src/experiment
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # src
+from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
 
 from auth import Auth
 from playwright.sync_api import sync_playwright
@@ -49,7 +45,6 @@ COUNT_PATTERNS = [
     r"([\d.]+)\s*(万|亿)?\s*播放",
     r"播放量[：: ]*([\d.]+)\s*(万|亿)?",
 ]
-
 
 def load_cookies_for_playwright():
     import json
@@ -72,7 +67,6 @@ def load_cookies_for_playwright():
         out.append(item)
     return out
 
-
 def read_count():
     """Open the video page as the viewer and extract the displayed play count (number)."""
     with sync_playwright() as p:
@@ -89,7 +83,6 @@ def read_count():
         if m:
             return m.group(1), m.group(0), text[:400]
     return None, None, text[:400]
-
 
 def post_beacon(session):
     base = ("https://multimedia.api.weibo.com/2/multimedia/user/"
@@ -113,7 +106,6 @@ def post_beacon(session):
                          timeout=20000)
         results.append((play_type, r.status_code, r.text[:200]))
     return results
-
 
 def main():
     print("=== [before] reading on-page play count ===")
@@ -140,7 +132,6 @@ def main():
     else:
         print("  CHANGED (%s -> %s) -> beacon-only POST incremented play count."
               % (before_num, after_num))
-
 
 if __name__ == "__main__":
     main()

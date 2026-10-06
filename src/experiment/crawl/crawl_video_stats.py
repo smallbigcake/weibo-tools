@@ -51,12 +51,7 @@ import re
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import argparse
 import json
 import os
@@ -70,11 +65,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from auth import Auth
 from constants import BROWSER_USER_AGENT as UA
+from config.accounts import AUTHOR_UID
 SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 VIDEOS_JSON = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_videos.json")
 OUT_JSON = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_author_video_stats.json")
 BASE = "https://me.weibo.com/api/proxy/native"
-
 
 def _get(a, path, params, delay, tag=""):
     time.sleep(delay)
@@ -99,7 +94,6 @@ def _get(a, path, params, delay, tag=""):
     print("  GAVE-UP %s %s after 4 retries" % (tag, path))
     return None
 
-
 def parse_weibo_info(default_json):
     if not default_json:
         return None
@@ -117,7 +111,6 @@ def parse_weibo_info(default_json):
             }
     return None
 
-
 def find_key(obj, key):
     """Recursively return the first value stored under dict key `key`."""
     if isinstance(obj, dict):
@@ -134,7 +127,6 @@ def find_key(obj, key):
                 return r
     return None
 
-
 # The API reports play_totallength in a unit that AUTO-SCALES with magnitude
 # (秒 for small values, 分钟 for larger, 小时 for huge). We keep the original
 # value + unit UNTOUCHED and store an EXTRA normalized field
@@ -142,7 +134,6 @@ def find_key(obj, key):
 # aggregation). CONVENTION: reports/display must use the ORIGINAL measurement
 # (play_totallength + play_totallength_unit); the _sec field is computation-only.
 UNIT_TO_SEC = {"秒": 1, "分钟": 60, "小时": 3600}
-
 
 def parse_traffic(traffic_json):
     if not traffic_json:
@@ -187,7 +178,6 @@ def parse_traffic(traffic_json):
         "play_totallength_sec": sec,  # normalized, computation-only (see comment above)
     }
 
-
 def _age_days(create_time):
     """Age of a video in days from author_videos.json create_time (epoch ms)."""
     if not create_time:
@@ -197,7 +187,6 @@ def _age_days(create_time):
     except Exception:
         return None
     return (datetime.now(timezone.utc) - ct).days
-
 
 def _extract_unit(resp):
     """Pull the play_totallength unit (e.g. 分钟) out of the API desc string
@@ -209,7 +198,6 @@ def _extract_unit(resp):
     if m:
         return m.group(1)
     return None
-
 
 def parse_select_series(resp, item_subtype):
     """Parse a datanew_selectdata?period=7 response into a list of
@@ -229,7 +217,6 @@ def parse_select_series(resp, item_subtype):
         out.append({"date": e.get("date"), "number": num})
     return out
 
-
 def fetch_publish_week(a, oid, mid, delay):
     """Fetch the post-publish 7-day DAILY series (play_count + play_totallength)
     from datanew_selectdata?period=7 and return
@@ -247,7 +234,6 @@ def fetch_publish_week(a, oid, mid, delay):
                            **({"unit": unit} if unit else {})} for e in series]
     return pw
 
-
 def interactions_from(vitem):
     """Cumulative reposts/comments/attitudes from author_videos.json.statistics
     (covers ALL videos, unlike weibo_info which the API omits for old videos)."""
@@ -261,7 +247,6 @@ def interactions_from(vitem):
         "comments_count": st.get("comment_count"),
         "attitudes_count": st.get("attitude_count"),
     }
-
 
 def parse_diagnosis(diag_json):
     if not diag_json:
@@ -279,7 +264,6 @@ def parse_diagnosis(diag_json):
                     "suggestion": sug.get("text")}
     return None
 
-
 def parse_clarity(score_json):
     if not score_json:
         return None
@@ -289,7 +273,6 @@ def parse_clarity(score_json):
             "text": d.get("text"),
             "desc_list": d.get("desc_list"),
             "suggestion": (d.get("suggestion") or {}).get("text")}
-
 
 def parse_playratio(pr_json):
     if not pr_json:
@@ -302,14 +285,12 @@ def parse_playratio(pr_json):
              "vs_peers_text": r.get("desc3_text"),
              "vs_peers_end": r.get("desc3_end")} for r in rows]
 
-
 def parse_scene(scene_json):
     if not scene_json:
         return None
     d = scene_json.get("data") or {}
     return [{"name": r.get("name"), "number": r.get("number"),
              "percent": r.get("percent")} for r in (d.get("groups") or [])]
-
 
 def parse_portrait(portrait_json):
     # Store the native API structure as-is (keys are API-native:
@@ -320,7 +301,6 @@ def parse_portrait(portrait_json):
         return None
     return _normalize_empty_keys(portrait_json.get("data"))
 
-
 def _normalize_empty_keys(o):
     if isinstance(o, dict):
         return {("default" if k == "" else k): _normalize_empty_keys(v)
@@ -328,7 +308,6 @@ def _normalize_empty_keys(o):
     if isinstance(o, list):
         return [_normalize_empty_keys(x) for x in o]
     return o
-
 
 def crawl_one(a, oid, mid, delay, vitem=None, skip_pubweek=False):
     p = {"video_oid": oid, "mid": mid, "blogger_uid": AUTHOR_UID}
@@ -358,7 +337,6 @@ def crawl_one(a, oid, mid, delay, vitem=None, skip_pubweek=False):
         "portrait": parse_portrait(portrait),
     }
 
-
 def merge_static(new_rec, old_rec):
     """Preserve STATIC fields the API stops returning on re-crawl.
 
@@ -372,7 +350,6 @@ def merge_static(new_rec, old_rec):
     if new_rec.get("weibo_info") is None and old_rec.get("weibo_info"):
         new_rec["weibo_info"] = old_rec["weibo_info"]
     return new_rec
-
 
 def main():
     ap = argparse.ArgumentParser()
@@ -485,7 +462,6 @@ def main():
     if args.diff:
         _run_diff()
 
-
 def _flush(store):
     store["meta"] = {
         "uid": AUTHOR_UID,
@@ -499,7 +475,6 @@ def _flush(store):
     }
     with open(OUT_JSON, "w", encoding="utf-8", newline='\n') as f:
         json.dump(store, f, ensure_ascii=False, indent=2)
-
 
 def _run_diff():
     """Phase 3: diff the just-written snapshot against the previous-day archive.
@@ -518,7 +493,6 @@ def _run_diff():
         print("  could not import diff_video_stats: %s" % ex)
         return
     diff_main()
-
 
 if __name__ == "__main__":
     main()

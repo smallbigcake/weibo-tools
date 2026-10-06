@@ -22,12 +22,7 @@ import os as _os
 import json as _json
 # src/experiment/<topic>/<script>.py -> project root (holds the git-ignored config/)
 _ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
-try:
-    _CFG = _json.load(open(_os.path.join(_ROOT, 'config', 'experiment.local.json'), encoding='utf-8'))
-except Exception:
-    _CFG = {}
-AUTHOR_UID = _CFG.get('author_uid')
-VIEWER_UID = _CFG.get('viewer_uid')
+
 import json
 import os
 import sys
@@ -36,6 +31,7 @@ from urllib.parse import urlencode
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
 
 from auth import Auth
 REPORT_EVERY = 1          # seconds of wall-clock between beacons (vs normal 30s)
@@ -44,7 +40,6 @@ REPS_PER_VIDEO = 10
 LATEST = os.path.join(_ROOT, "src", "data", "video", "latest_videos.json")
 from constants import BROWSER_USER_AGENT as UA
 BASE = "https://multimedia.api.weibo.com/2/multimedia/user/play_history/report.json"
-
 
 def build_params(mid, oid, duration, seconds, play_type):
     return {
@@ -59,7 +54,6 @@ def build_params(mid, oid, duration, seconds, play_type):
         "reqHost": "https://weibo.com/%s/%s" % (AUTHOR_UID, mid),
         "seconds": str(int(seconds)),
     }
-
 
 def main():
     videos = json.load(open(LATEST, encoding="utf-8"))
@@ -102,7 +96,6 @@ def main():
                        "data", "probe", "probe_playduration_log.json")
     json.dump(results, open(out, "w", encoding="utf-8", newline='\n'), ensure_ascii=False, indent=2)
     print("Saved %s" % out)
-
 
 if __name__ == "__main__":
     main()
