@@ -288,7 +288,7 @@ class TestTopFollowedAggregate(unittest.TestCase):
         tmp = tempfile.mkdtemp()
 
         def dump(name, obj):
-            with open(os.path.join(tmp, name), 'w', encoding='utf-8') as f:
+            with open(os.path.join(tmp, name), 'w', encoding='utf-8', newline='\n') as f:
                 json.dump(obj, f)
 
         # Genuine per-user follow caches always carry 'sample'.
@@ -370,7 +370,7 @@ class TestRelationSyncNoInfiniteLoop(unittest.TestCase):
 class TestTopFollowedShare(unittest.TestCase):
     def _run_with(self, follow_dir, data_dir):
         def dump(name, obj):
-            with open(os.path.join(follow_dir, name), 'w', encoding='utf-8') as f:
+            with open(os.path.join(follow_dir, name), 'w', encoding='utf-8', newline='\n') as f:
                 json.dump(obj, f)
 
         # Three follow lists: uid '1' appears 3x, '2' 2x, '3' 1x -> 6 edges.
@@ -420,7 +420,7 @@ class TestTopFollowedKeyTolerance(unittest.TestCase):
         tmp = tempfile.mkdtemp()
 
         def dump(name, obj):
-            with open(os.path.join(tmp, name), 'w', encoding='utf-8') as f:
+            with open(os.path.join(tmp, name), 'w', encoding='utf-8', newline='\n') as f:
                 json.dump(obj, f)
 
         # Caches written with the legacy 'followers' / 'fans' keys (not 'uids').

@@ -124,7 +124,7 @@ def live_explore():
             page.wait_for_timeout(4000)
             print("visited %s (hits=%d)" % (url, len(HITS)))
         browser.close()
-    with open(os.path.join(os.path.dirname(os.path.dirname(EXP)), "tmp", "creator", "creator_explore.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(os.path.dirname(os.path.dirname(EXP)), "tmp", "creator", "creator_explore.json"), "w", encoding="utf-8", newline='\n') as f:
         json.dump(HITS, f, ensure_ascii=False, indent=2)
     print("\n=== %d candidate weibo AJAX responses ===" % len(HITS))
     for h in HITS[:30]:

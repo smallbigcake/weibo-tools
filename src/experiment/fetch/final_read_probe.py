@@ -87,7 +87,7 @@ def main():
         browser.close()
 
     urls = sorted(set(a["url"] for a in AJAX))
-    with open(os.path.join(EXP, "final_read_ajax.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(EXP, "final_read_ajax.json"), "w", encoding="utf-8", newline='\n') as f:
         json.dump(AJAX, f, ensure_ascii=False, indent=2)
     print("\n=== %d ajax responses (%d unique) ===" % (len(AJAX), len(urls)))
     for u in urls:
