@@ -1,3 +1,9 @@
+# Normalize line endings: store and check out all text files with LF so
+# Windows/Linux contributors don't generate CRLF/LF churn in diffs.
+# Placed BEFORE the binary rules below so the specific `-text`/LFS lines still
+# win for binary assets (they must stay out of text normalization).
+* text=auto eol=lf
+
 # Binary assets are NOT committed (mirrored ones are git-ignored; see
 # .gitignore). This LFS config is kept as a safety net: should a binary ever be
 # committed, it lands in LFS instead of bloating the object database.
