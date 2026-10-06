@@ -35,6 +35,34 @@ _INI = os.path.join(_CONFIG_DIR, 'config', 'logging.ini')
 _setup_done = False
 
 
+# Force LF line endings in every FileHandler's output. On Windows, Python's text
+# mode translates '\n' -> '\r\n' on write, so log files would otherwise be CRLF.
+# FileHandler exposes no portable flag for this (and on some Pythons its __init__
+# rejects `newline=`), so we reopen the underlying stream with newline='\n'
+# immediately after construction. This covers both the central log configured via
+# config/logging.ini and any direct logging.FileHandler(...) call site.
+def _reopen_stream_lf(handler):
+    stream = getattr(handler, 'stream', None)
+    if stream is None:  # delay=True handlers open lazily (not used here)
+        return
+    try:
+        stream.close()
+    except Exception:
+        pass
+    try:
+        handler.stream = open(handler.baseFilename, handler.mode,
+                               encoding=handler.encoding or 'utf-8', newline='\n')
+    except Exception:
+        pass
+
+
+_orig_filehandler_init = logging.FileHandler.__init__
+def _filehandler_init_lf(self, *args, **kwargs):
+    _orig_filehandler_init(self, *args, **kwargs)
+    _reopen_stream_lf(self)
+logging.FileHandler.__init__ = _filehandler_init_lf
+
+
 def setup():
     """Load `config/logging.ini` exactly once (idempotent).
 
