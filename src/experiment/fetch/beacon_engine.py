@@ -1081,7 +1081,7 @@ def snapshot_aggregates(tag):
             "last_7d": sev.get("last_7d", {}),
             "last_30d": sev.get("last_30d", {})}
     path = os.path.join(SRC_DIR, "data", "watch", "beacon_engine_%s.json" % tag)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline='\n') as f:
         json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
 
@@ -1106,7 +1106,7 @@ def _write_audit(results, channels):
     run_stamp = batch_stamp()
     res_path = os.path.join(WATCH_DIR,
                             "beacon_engine_responses_%s.jsonl" % run_stamp)
-    with open(res_path, "w", encoding="utf-8") as f:
+    with open(res_path, "w", encoding="utf-8", newline='\n') as f:
         for rec in results:
             f.write(_json.dumps(rec, ensure_ascii=False) + "\n")
     log.info("=== SERVER RESPONSE AUDIT (%d calls, channels=%s) ===",
@@ -1128,10 +1128,10 @@ def _save_run_record(run_record):
     archived = _archive_current_log()
     if archived:
         log.info("archived previous snapshot -> %s", archived)
-    with open(LOG_PATH, "w", encoding="utf-8") as f:
+    with open(LOG_PATH, "w", encoding="utf-8", newline='\n') as f:
         json.dump(run_record, f, ensure_ascii=False, indent=2)
     day_path = _daily_log_path()
-    with open(day_path, "a", encoding="utf-8") as f:
+    with open(day_path, "a", encoding="utf-8", newline='\n') as f:
         f.write(json.dumps(run_record, ensure_ascii=False) + "\n")
     log.info("  latest log -> %s", LOG_PATH)
     log.info("  daily history -> %s", day_path)

@@ -153,7 +153,7 @@ def main():
     archived = archive_existing(OUT)  # keep the previous snapshot before overwrite
     if archived:
         print("archived previous ->", archived)
-    with open(OUT, "w", encoding="utf-8") as f:
+    with open(OUT, "w", encoding="utf-8", newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     print("\n=== done ===")

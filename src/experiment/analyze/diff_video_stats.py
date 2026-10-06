@@ -438,7 +438,7 @@ def main():
     if not stamp:
         stamp = batch_stamp()  # fallback: current UTC time
     out_path = os.path.join(OUT_DIR, "creator_center_author_video_stats_diff_%s.md" % stamp)
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(out_path, "w", encoding="utf-8", newline='\n') as f:
         f.write(out)
     print("wrote ->", out_path)
     print("changed=%d new=%d gone=%d unchanged=%d" % (len(changed), len(new_videos), len(gone), unchanged))

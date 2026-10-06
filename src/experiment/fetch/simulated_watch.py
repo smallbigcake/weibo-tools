@@ -556,7 +556,7 @@ def snapshot_aggregates(tag):
             "yesterday": yest, "last_7d": sev.get("last_7d", {}),
             "last_30d": sev.get("last_30d", {})}
     path = os.path.join(WATCH_DIR, "simulated_watch_%s.json" % tag)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline='\n') as f:
         _json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
 

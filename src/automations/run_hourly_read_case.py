@@ -122,7 +122,7 @@ def main():
            'delta': (after - before) if (before is not None and after is not None) else None,
            'visit_result': res}
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
-    with open(LOG, 'a', encoding='utf-8') as f:
+    with open(LOG, 'a', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
     print(json.dumps(rec, ensure_ascii=False), flush=True)
 

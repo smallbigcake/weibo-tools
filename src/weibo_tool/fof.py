@@ -91,7 +91,7 @@ def save_fof_cache(owner_uid, fuid, recs):
     """Persist one friend's follow list in the unified cache directory."""
     path = _cache_path(owner_uid, fuid)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(recs, f, ensure_ascii=False)
 
 

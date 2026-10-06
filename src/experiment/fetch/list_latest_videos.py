@@ -72,7 +72,7 @@ def main():
 
     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "latest_%d_videos.json" % len(out))
-    with open(out_path, "w", encoding="utf-8") as f:
+    with open(out_path, "w", encoding="utf-8", newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("\nSaved ->", out_path)
 

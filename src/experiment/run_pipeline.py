@@ -86,7 +86,7 @@ def main():
     log_path = os.path.join(LOG_DIR, "creator_center_%s.log" % _now())
     print("creator_center pipeline log -> %s" % log_path, flush=True)
 
-    with open(log_path, "w", encoding="utf-8") as logf:
+    with open(log_path, "w", encoding="utf-8", newline='\n') as logf:
         logf.write("creator_center pipeline started %s (UTC)\n" % _now())
         logf.flush()
 

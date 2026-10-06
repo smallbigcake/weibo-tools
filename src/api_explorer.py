@@ -732,7 +732,7 @@ def main():
         # catalogue is de-identified by default (see src/inventory_redact.py).
         if not args.no_redact:
             payload = redact_payload(payload)
-        with open(INVENTORY_JSON, 'w', encoding='utf-8') as f:
+        with open(INVENTORY_JSON, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
         print('Wrote', INVENTORY_JSON, '(%d endpoints)%s'
               % (len(endpoints), '' if args.no_redact else ' [de-identified]'))
@@ -925,7 +925,7 @@ def render_markdown(redact=True):
             lines.append('  ```')
         lines.append('')
 
-    with open(INVENTORY_MD, 'w', encoding='utf-8') as f:
+    with open(INVENTORY_MD, 'w', encoding='utf-8', newline='\n') as f:
         f.write('\n'.join(lines))
     print('Wrote', INVENTORY_MD)
 

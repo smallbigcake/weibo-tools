@@ -306,7 +306,7 @@ def run(args, auth):
         out_records.append(rr)
     payload = {'summary': summary, 'users': out_records}
     os.makedirs(os.path.dirname(os.path.abspath(json_path)), exist_ok=True)
-    with open(json_path, 'w', encoding='utf-8') as f:
+    with open(json_path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     print('\nJSON written to %s' % json_path)
 

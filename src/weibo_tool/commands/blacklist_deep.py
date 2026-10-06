@@ -82,7 +82,7 @@ def _load_json(path, default=None):
 
 
 def _save_json(path, obj):
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
 
@@ -703,7 +703,7 @@ def write_summary_md(summary, path, subject=None, viewer=None, generated_at=None
     lines.append('- Audience punished (is_punish): %d' % fp.get('audience_punished', 0))
     lines.append('- Audience low-credit (<60): %d' % fp.get('audience_lowcredit', 0))
     lines.append('')
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write('\n'.join(lines) + '\n')
 
 
@@ -953,7 +953,7 @@ def run(args, auth):
             rr['interests_detail'] = r['_posts'].get('interests')
         out_records.append(rr)
     payload = {'summary': summary, 'users': out_records}
-    with open(json_path, 'w', encoding='utf-8') as f:
+    with open(json_path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     print('\nJSON written to %s' % json_path)
 

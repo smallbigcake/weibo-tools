@@ -100,7 +100,7 @@ def main():
 
     out = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                        "data", "probe", "probe_playduration_log.json")
-    json.dump(results, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    json.dump(results, open(out, "w", encoding="utf-8", newline='\n'), ensure_ascii=False, indent=2)
     print("Saved %s" % out)
 
 

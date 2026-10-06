@@ -138,7 +138,7 @@ def _flush(store):
                  "(play_totallength_sec) using the API number_unit; Chinese kept "
                  "only as values"),
     }
-    with open(OUT_JSON, "w", encoding="utf-8") as f:
+    with open(OUT_JSON, "w", encoding="utf-8", newline='\n') as f:
         json.dump(store, f, ensure_ascii=False, indent=2)
 
 

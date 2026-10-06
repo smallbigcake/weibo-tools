@@ -114,7 +114,7 @@ def main():
         "videos": rows,
     }
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
+    with open(LOG_PATH, "a", encoding="utf-8", newline='\n') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     print("  appended -> %s" % LOG_PATH)
     return rec

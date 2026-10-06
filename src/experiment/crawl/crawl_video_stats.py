@@ -497,7 +497,7 @@ def _flush(store):
         "note": ("per-video statistics; JSON keys follow original API field names; "
                  "Chinese kept only as values"),
     }
-    with open(OUT_JSON, "w", encoding="utf-8") as f:
+    with open(OUT_JSON, "w", encoding="utf-8", newline='\n') as f:
         json.dump(store, f, ensure_ascii=False, indent=2)
 
 

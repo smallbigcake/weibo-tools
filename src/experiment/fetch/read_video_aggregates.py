@@ -191,7 +191,7 @@ def main():
     os.makedirs(os.path.join(SRC_DIR, "data", "creator_center"), exist_ok=True)
     stamp = batch_stamp()
     path = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_video_aggregates_%s.json" % stamp)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline='\n') as f:
         json.dump(snapshot, f, ensure_ascii=False, indent=2)
 
     print("=== creator-center video aggregate snapshot ===")

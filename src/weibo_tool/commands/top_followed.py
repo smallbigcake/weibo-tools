@@ -320,7 +320,7 @@ def run(args, auth):
             for i, (uid, cnt) in enumerate(ranked, 1)
         ],
     }
-    with open(json_path, 'w', encoding='utf-8') as fh:
+    with open(json_path, 'w', encoding='utf-8', newline='\n') as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
     with open(csv_path, 'w', encoding='utf-8', newline='') as fh:
         w = csv.writer(fh)

@@ -80,7 +80,7 @@ def main():
         a("")
 
 
-    with open(OUT, "w", encoding="utf-8") as f:
+    with open(OUT, "w", encoding="utf-8", newline='\n') as f:
         f.write("\n".join(lines))
     print("Wrote report to %s (%d lines)" % (OUT, len(lines)))
 

@@ -219,7 +219,7 @@ def main():
         "request_count": len(records),
         "requests": records,
     }
-    with open(OUT_PATH, "w", encoding="utf-8") as f:
+    with open(OUT_PATH, "w", encoding="utf-8", newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("Saved %d requests to %s" % (len(records), OUT_PATH))
 

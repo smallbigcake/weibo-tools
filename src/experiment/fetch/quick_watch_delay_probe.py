@@ -286,7 +286,7 @@ def snapshot_aggregates(tag):
             "last_7d": sev.get("last_7d", {}),
             "last_30d": sev.get("last_30d", {})}
     path = os.path.join(SRC_DIR, "data", "watch", "quick_watch_probe_%s.json" % tag)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline='\n') as f:
         json.dump(snap, f, ensure_ascii=False, indent=2)
     return snap, path
 

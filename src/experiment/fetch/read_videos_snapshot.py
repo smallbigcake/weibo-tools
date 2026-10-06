@@ -103,7 +103,7 @@ def main():
     os.makedirs(os.path.join(SRC_DIR, "data", "creator_center"), exist_ok=True)
     stamp = batch_stamp()
     path = os.path.join(SRC_DIR, "data", "creator_center", "creator_center_videos_snapshot_%s.json" % stamp)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline='\n') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print("snapshotted %d videos, total play_count=%s -> %s" %
           (len(videos), f"{total_play:,}", path))

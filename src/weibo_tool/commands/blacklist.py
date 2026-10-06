@@ -38,6 +38,6 @@ def run(args, auth):
 
     if args.json:
         out = {'summary': summary, 'users': users}
-        with open(args.json, 'w', encoding='utf-8') as f:
+        with open(args.json, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(out, f, ensure_ascii=False, indent=2)
         print('\nJSON written to %s' % args.json)

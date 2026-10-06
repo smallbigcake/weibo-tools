@@ -132,7 +132,7 @@ def run(args, auth):
             return 1
         dump = retry_uids(viewer, args.retry_uid, retries=args.retries)
         out_path = args.json or os.path.join(DATA_DIR, 'diag_retry.json')
-        with open(out_path, 'w', encoding='utf-8') as f:
+        with open(out_path, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(dump, f, ensure_ascii=False, indent=2)
         print('[blacklist-diag] retry dump written to %s' % out_path)
         for item in dump:
@@ -156,6 +156,6 @@ def run(args, auth):
     for k, v in result['reasons'].items():
         print('  %5d  %s' % (v, k))
     out_path = os.path.join(DATA_DIR, 'diag_errors.json')
-    with open(out_path, 'w', encoding='utf-8') as f:
+    with open(out_path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
     print('\n[blacklist-diag] written to %s' % out_path)

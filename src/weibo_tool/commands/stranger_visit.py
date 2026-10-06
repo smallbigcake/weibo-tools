@@ -133,7 +133,7 @@ def _load_visited(path):
 
 def _save_visited(path, visited):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(sorted(visited), f, ensure_ascii=False, indent=2)
 
 
@@ -173,7 +173,7 @@ def _load_banned(owner):
 def _save_banned(owner, mapping):
     path = _banned_path(owner)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(mapping, f, ensure_ascii=False, indent=2)
 
 

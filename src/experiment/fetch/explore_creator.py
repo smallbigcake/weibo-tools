@@ -62,7 +62,7 @@ def dump_videotab():
                       timeout=20000)
     data = r.json()
     path = os.path.join(os.path.dirname(os.path.dirname(EXP)), "tmp", "creator", "videotab_dump.json")
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline='\n') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     # show the keys of the first video item
     vids = data.get("data", {}).get("list") or data.get("data", {}).get("videos") or []

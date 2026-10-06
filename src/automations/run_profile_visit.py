@@ -224,7 +224,7 @@ def main():
         'elapsed_s': elapsed,
         'coverage': _coverage(owner_uid),
     }
-    with open(LOG, 'a', encoding='utf-8') as f:
+    with open(LOG, 'a', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
     print(json.dumps(rec, ensure_ascii=False), flush=True)
 

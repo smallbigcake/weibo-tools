@@ -54,7 +54,7 @@ def _load_label_map():
 
 
 def _save_label_map(mapping):
-    with open(LABEL_MAP_PATH, 'w', encoding='utf-8') as f:
+    with open(LABEL_MAP_PATH, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(mapping, f, ensure_ascii=False, indent=2)
 
 WEIBO_HOME_URL = 'https://weibo.com'
@@ -561,7 +561,7 @@ class Auth(object):
         curr = {c['name'] + '@' + c.get('domain', '') for c in cookies_data}
         updated = sorted(curr & prev)
         added = sorted(curr - prev)
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(cookies_data, f, ensure_ascii=False, indent=2)
         logging.info(f'Saved {len(cookies_data)} cookies.\n'
                      f'  keys: {_describe_cookies(self.session.cookies)}\n'

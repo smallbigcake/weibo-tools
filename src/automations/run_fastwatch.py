@@ -175,7 +175,7 @@ def main():
             'total_watch_seconds': 0,
             'error': 'session_not_restored',
         }
-        with open(LOG, 'a', encoding='utf-8') as f:
+        with open(LOG, 'a', encoding='utf-8', newline='\n') as f:
             f.write(json.dumps(rec, ensure_ascii=False) + '\n')
         log.info(json.dumps(rec, ensure_ascii=False))
         return 1
@@ -199,7 +199,7 @@ def main():
         'elapsed_seconds_log': summary.get('elapsed_seconds'),
         'total_watch_seconds': summary.get('total_watch_seconds'),
     }
-    with open(LOG, 'a', encoding='utf-8') as f:
+    with open(LOG, 'a', encoding='utf-8', newline='\n') as f:
         f.write(json.dumps(rec, ensure_ascii=False) + '\n')
     log.info(json.dumps(rec, ensure_ascii=False))
     return 0

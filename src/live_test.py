@@ -182,7 +182,7 @@ def main():
     # Keep the inventory de-identified even if it was produced by an older,
     # non-redacting run of api_explorer.py (redaction is idempotent).
     inv = redact_payload(inv)
-    json.dump(inv, open(INV, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+    json.dump(inv, open(INV, 'w', encoding='utf-8', newline='\n'), ensure_ascii=False, indent=2)
 
     c = Counter(r.get('live_status') for r in endpoints.values())
     print('--- live verdicts ---')
