@@ -50,9 +50,16 @@ def legacy_cookie_path():
 
 WEIBO_HOME_URL = 'https://weibo.com'
 
-# Global browser User-Agent. A realistic browser UA is required on every
-# request to match the behavior of a real browser session.
+# Global browser User-Agent, re-exported from constants: a realistic browser UA
+# is required on every request, and several modules do
+# ``from auth import USER_AGENT``.
 from constants import BROWSER_USER_AGENT as USER_AGENT
+
+# Browser-fingerprinted HTTP transport. Login and the beacon simulator
+# share one session object, so both carry the same fingerprint.
+from browser_session import BrowserSession
+
+
 # Visitor (guest) session bootstrap. The guest SUB is obtained from
 # genvisitor2 (returned in the JSONP body, written to .weibo.com by first-party
 # JS in the browser), then the device fingerprint is reported via /sso/bd.
@@ -107,7 +114,7 @@ class Auth(object):
         self.uid = None
         self.label = user or 'default'
         self.cookies = []
-        self.session = requests.Session()
+        self.session = BrowserSession()
         self.session.headers.update({'User-Agent': USER_AGENT})
 
     @staticmethod

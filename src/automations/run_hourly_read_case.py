@@ -10,8 +10,10 @@ and appends one JSON line to src/log/automation/hourly_read_case.jsonl.
 
 Controlled visits do NOT increment reads_count (proven); the visit is just a
 fixed observation point to watch the ORGANIC growth of a real public post.
-Access is performed entirely over HTTP via the requests session -- no
-browser/Playwright is used.
+Access is performed entirely over HTTP (no browser/Playwright): the viewer
+session is a BrowserSession (see src/browser_session.py), i.e. the same
+browser-fingerprinted transport auth and the beacons use, instead of a bare
+python-requests session.
 
 Usage (from the project root):
 
@@ -22,8 +24,6 @@ import os
 import time
 import json
 
-import requests
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.abspath(os.path.join(HERE, '..'))
 sys.path.insert(0, SRC)
@@ -31,6 +31,7 @@ from config.accounts import AUTHOR_UID, VIEWER_UID  # noqa: E402
 os.chdir(SRC)
 
 from auth import Auth  # noqa: E402
+from browser_session import BrowserSession  # noqa: E402
 from datetime_util import record_now  # noqa: E402
 
 CASE_MB = 'P9v636F64'
@@ -44,8 +45,10 @@ H_JSON = {'User-Agent': UA, 'Accept': 'application/json, text/plain, */*',
           'Referer': 'https://weibo.com/', 'x-requested-with': 'XMLHttpRequest'}
 
 def build_viewer_session():
-    """Authenticated requests session for the viewer, loaded from its cookie file."""
-    s = requests.Session()
+    """Authenticated browser-fingerprinted session for the viewer, loaded from
+    its cookie file. Same transport as auth/beacons (see browser_session.py), so
+    this observation traffic stops standing out as python-requests."""
+    s = BrowserSession()
     s.headers.update({'User-Agent': UA})
     with open(VIEWER_COOKIE_FILE, encoding='utf-8') as f:
         for c in json.load(f):

@@ -45,7 +45,9 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse, unquote
 
-import requests
+# Browser-fingerprinted transport -- the same session type auth and the beacons
+# use -- so CDN crawls do not stand out as python-requests.
+from browser_session import BrowserSession
 
 # Browser-like headers: some buckets reject requests without a UA / Referer.
 from constants import BROWSER_USER_AGENT as UA
@@ -218,7 +220,7 @@ class Fetcher(object):
         self.delay = delay
         self.force = force
         self.dry_run = dry_run
-        self.session = requests.Session()
+        self.session = BrowserSession()
         self.session.headers.update({
             'User-Agent': UA,
             'Accept': '*/*',

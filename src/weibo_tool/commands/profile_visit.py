@@ -94,12 +94,12 @@ TOPIC_URL = 'https://weibo.com/ajax/profile/topicContent?tabid=231093_-_recently
 # Browser-like User-Agent / client headers, taken from a real Chrome profile
 # page load (HAR captured 2026-09-04). These are required so the server treats
 # the requests as a genuine page view rather than a single API probe.
-from constants import BROWSER_USER_AGENT as _UA
-# Pinned client/server version headers captured from a real Chrome profile-page
-# load (HAR, 2026-09-04). Weibo only treats the request as a genuine page view
-# when these are present, so they are KEPT VERBATIM (not randomised or derived
-# from a live page fetch). If visit registration ever stops working, refresh both
-# here — this is the only place the two magic version strings live.
+from constants import BROWSER_USER_AGENT as _UA, CHROME_CLIENT_HINTS
+# Client Hints (sec-ch-ua*): the Chrome MAJOR version here MUST match the
+# User-Agent above. They now come from constants.CHROME_CLIENT_HINTS (the same
+# single source beacon_engine uses) so the two never drift apart. Weibo only
+# treats the request as a genuine page view when these are present; if visit
+# registration ever stops working, bump CHROME_MAJOR_VERSION in constants.py.
 _CLIENT_VERSION = 'v1.1.244'
 _SERVER_VERSION = 'v2026.09.02.2'
 
@@ -203,9 +203,7 @@ def _visit_headers(auth, uid):
         'server-version': _SERVER_VERSION,
         'priority': 'u=1, i',
         'referer': 'https://weibo.com/u/%s' % uid,
-        'sec-ch-ua': '"Chromium";v="152", "Not?A_Brand";v="24", "Google Chrome";v="152"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
+        **CHROME_CLIENT_HINTS,
         'sec-fetch-dest': 'empty',
         'sec-fetch-mode': 'cors',
         'sec-fetch-site': 'same-origin',

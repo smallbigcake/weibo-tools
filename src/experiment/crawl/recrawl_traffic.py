@@ -110,11 +110,12 @@ def main():
                 rec["interactions"] = interactions
             store["videos"][mid] = rec
             ok += 1
-            print("[%d/%d] %s total_play=%s len=%ss (%s) pub7_play=%s" % (
+            print("[%d/%d] %s play=%s len=%s%s (%ss) pub7_play=%s" % (
                 i, len(queue), mid,
                 (t7 or {}).get("play_count"),
-                (t7 or {}).get("play_totallength_sec"),
+                (t7 or {}).get("play_totallength"),
                 (t7 or {}).get("play_totallength_unit"),
+                (t7 or {}).get("play_totallength_sec"),
                 sum(int(d["number"]) for d in (pubweek or {}).get("play_count", [])
                     if isinstance(d.get("number"), (int, float)))))
         except Exception as ex:

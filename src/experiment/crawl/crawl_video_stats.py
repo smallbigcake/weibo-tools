@@ -394,6 +394,9 @@ def main():
     a = Auth()
     a.uid = AUTHOR_UID
     a.load()
+    if not a.ensure_session(allow_renew=True):
+        raise SystemExit("AUTHOR session expired and silent SSO renew failed; "
+                         "refresh cookies via login, then retry.")
 
     from data_archive import archive_existing
     archived = archive_existing(OUT_JSON)  # keep the previous snapshot before overwrite
@@ -445,9 +448,10 @@ def main():
             pw = rec.get("publish_week_daily") or {}
             pw_play = sum(int(d["number"]) for d in pw.get("play_count", [])
                           if isinstance(d.get("number"), (int, float)))
-            print("[%d/%d] %s total_play=%s len=%ss (%s) pub7_play=%d clarity=%s" % (
+            print("[%d/%d] %s play=%s len=%s%s (%ss) pub7_play=%d clarity=%s" % (
                 i, len(queue), mid, tt.get("play_count"),
-                tt.get("play_totallength_sec"), tt.get("play_totallength_unit"), pw_play,
+                tt.get("play_totallength"), tt.get("play_totallength_unit"),
+                tt.get("play_totallength_sec"), pw_play,
                 (rec.get("clarity_score") or {}).get("score")))
         except Exception as ex:
             print("  ERR %s: %s" % (mid, ex))

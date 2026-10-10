@@ -43,6 +43,9 @@ def fetch_all():
     a = Auth()
     a.uid = AUTHOR_UID
     a.load()
+    if not a.ensure_session(allow_renew=True):
+        raise SystemExit("AUTHOR session expired and silent SSO renew failed; "
+                         "refresh cookies via login, then retry.")
     out = []
     cursor = "0"
     while True:

@@ -950,8 +950,6 @@ def _post_rum_step(session, transactions, results, label=None):
         "Content-Type": "application/x-ndjson",
         "Content-Encoding": "gzip",
         "Accept": "*/*",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
     }
     status = err = None
     try:
@@ -1099,6 +1097,9 @@ def _save_run_record(run_record):
     log.info("  latest log -> %s", LOG_PATH)
     log.info("  daily history -> %s", day_path)
 
+
+
+
 def _viewer_session(viewer_uid=VIEWER_UID):
     """Build a logged-in viewer session for `viewer_uid` (silent SSO only; no QR).
 
@@ -1121,6 +1122,9 @@ def _viewer_session(viewer_uid=VIEWER_UID):
             return None
         a.save_cookies()
     a.session.viewer_uid = viewer_uid
+    # a.session is already a BrowserSession (see browser_session.py): outbound
+    # HTTP carries a real browser JA3/JA4 + HTTP/2 fingerprint while login/save
+    # stay on the requests CookieJar. Return it directly as the viewer session.
     return a.session
 
 def main():
